@@ -6,26 +6,30 @@
 ```
 PortfolioItem {
   id: string (UUID/auto-generated)
-  ticker: string (e.g., "AAPL", "GOOG")
+  ticker: string (e.g., "AAPL", "GOOG", "CASH")
+  assetType: string ('stock', 'bond', 'cash', etc)
   quantity: number (current quantity held)
-  costBasis: number (total cost of shares held - updated on transactions)
-  currentPrice: number (cached from external source)
+  costBasis: number (total cost of current holdings)
   lastUpdated: timestamp
 }
 ```
+
+**Note:** `currentPrice` is fetched from Yahoo Finance at query time, not stored. 
+**Special Case:** "CASH" is a PortfolioItem with quantity = available cash, costBasis = quantity
 
 ### Transaction History Entity
 ```
 Transaction {
   id: string (UUID/auto-generated)
-  ticker: string (e.g., "AAPL", "GOOG")
+  portfolioItemId: string (which portfolio item was affected)
   type: string ('buy' | 'sell')
   quantity: number (positive for both buy and sell)
   price: number (price per share)
   date: timestamp (transaction date)
-  createdAt: timestamp (when added to system)
+  useCash: boolean (true for sells, true/false for buys - indicates if cash was used)
 }
 ```
+**Note:** ticker and assetType are NOT stored; retrieved from related PortfolioItem
 
 ### Database Collection Structure (Firestore)
 - Collection: `portfolio` (single document for current holdings)
@@ -34,11 +38,11 @@ Transaction {
 
 ---
 
-## 2. CORE API ENDPOINTS
+## 2. CORE API ENDPOINTS & IMPLEMENTATION ARCHITECTURE
 
 ### Portfolio Operations
-- `GET /api/portfolio` - Retrieve full portfolio (current holdings)
-- `GET /api/portfolio/items` - List all items (paginated if needed)
+- `GET /api/portfolio` - Retrieve all portfolio items (current holdings)
+- `GET /api/portfolio/items/{ticker}` - Get specific portfolio item by ticker
 - `GET /api/portfolio/performance` - Calculate portfolio metrics
 
 ### Transaction Management
@@ -52,6 +56,47 @@ Transaction {
 - `POST /api/prices/refresh` - Refresh all prices from Yahoo Finance
 
 ---
+
+## 2A. BUSINESS LOGIC FOR BUY and SELL transactions - POST/transactions
+
+**Note:** All steps within ADD and DELETE flows must be atomic—wrap in Firestore transactions so if any step fails, all changes rollback.
+
+### ADD (Buy Stock or Add Existing Holdings)
+**Preconditions:**
+- None (useCash determines cash handling)
+
+**Flow:**
+1. **If `useCash: true`:**
+   - Fetch CASH item, verify balance ≥ purchase amount
+   - Deduct from CASH: `cash.quantity -= (quantity × price)`
+2. **If `useCash: false`:**
+   - Skip cash balance check (user tracking existing holdings)
+3. Check if PortfolioItem exists for ticker + assetType:
+   - **If exists:** Update quantity and costBasis
+     - `new quantity = existing quantity + bought quantity`
+     - `new costBasis = existing costBasis + (bought quantity × price)`
+   - **If not exists:** Create new PortfolioItem
+4. Create Transaction record with type='buy', portfolioItemId, useCash=true/false
+5. Update lastUpdated timestamps
+
+### DELETE (Sell Stock)
+**Preconditions:**
+- PortfolioItem exists with sufficient quantity
+
+**Flow:**
+1. Fetch PortfolioItem to sell, verify quantity ≥ amount to sell
+2. Calculate proceeds = `quantity sold × price per share`
+3. Add to CASH: `cash.quantity += proceeds`
+4. Update stock PortfolioItem:
+   - Calculate `costBasis per share = existing costBasis / existing quantity`
+   - `new costBasis = costBasis per share × new quantity`
+   - `new quantity = existing quantity - sold quantity`
+5. Create Transaction record with type='sell', portfolioItemId, useCash=true
+6. If new quantity = 0, optionally delete PortfolioItem
+7. Update lastUpdated timestamps
+
+---
+
 
 ## 3. FRONTEND COMPONENT STRUCTURE
 
@@ -148,10 +193,10 @@ PortfolioManager/
 
 ## 5. PRIORITIZED IMPLEMENTATION ROADMAP
 
-### Phase 1: Backend API Foundation (Days 1-2)
-1. Initialize Python project with Flask/FastAPI
-2. Set up Firebase/Firestore connection
-3. Implement `PortfolioItem` and `Transaction` models
+### Phase 1: Backend Models & Firestore Setup (Days 1-2)
+1. ✅ Initialize Python project with Flask
+2. ✅ Define `PortfolioItem` and `Transaction` Pydantic models
+3. Set up Firebase/Firestore connection
 4. Create Firestore service layer with CRUD operations
 5. Implement endpoints: `GET /api/portfolio`, `GET /api/portfolio/items`
 6. Add basic error handling and logging
@@ -209,14 +254,15 @@ PortfolioManager/
 ## 6. DEPENDENCIES & SETUP REQUIREMENTS
 
 ### Backend Dependencies (Python)
-- Flask or FastAPI (HTTP framework)
+- Flask (HTTP framework)
+- Flask-CORS (CORS middleware)
 - firebase-admin (Firestore SDK)
 - yfinance (Yahoo Finance data)
 - python-dotenv (environment management)
 - pydantic (data validation)
 - requests (HTTP client)
 - pytest (testing)
-- CORS middleware (for frontend communication)
+- gunicorn (production server)
 
 ### Frontend Dependencies
 - react, react-dom
