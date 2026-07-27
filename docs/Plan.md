@@ -2,45 +2,50 @@
 
 ## 1. MINIMAL DATA MODEL
 
-### Core Portfolio Item Entity
+### Core Portfolio Item Entity (Current Holdings)
 ```
 PortfolioItem {
   id: string (UUID/auto-generated)
   ticker: string (e.g., "AAPL", "GOOG")
-  volume: number (quantity held)
-  purchasePrice: number (optional, for performance calculation)
-  purchaseDate: timestamp (optional, for performance)
+  quantity: number (current quantity held)
+  costBasis: number (total cost of shares held - updated on transactions)
   currentPrice: number (cached from external source)
   lastUpdated: timestamp
 }
+```
 
-Portfolio {
-  userId: string (fixed single user, hardcoded)
-  items: PortfolioItem[]
-  createdAt: timestamp
-  lastModified: timestamp
+### Transaction History Entity
+```
+Transaction {
+  id: string (UUID/auto-generated)
+  ticker: string (e.g., "AAPL", "GOOG")
+  type: string ('buy' | 'sell')
+  quantity: number (positive for both buy and sell)
+  price: number (price per share)
+  date: timestamp (transaction date)
+  createdAt: timestamp (when added to system)
 }
 ```
 
 ### Database Collection Structure (Firestore)
-- Collection: `portfolios`
-  - Document: `default` (single user portfolio)
-    - Subcollection: `items` (individual portfolio items)
+- Collection: `portfolio` (single document for current holdings)
+  - Subcollection: `items` (current portfolio items)
+- Collection: `transactions` (immutable transaction history)
 
 ---
 
 ## 2. CORE API ENDPOINTS
 
 ### Portfolio Operations
-- `GET /api/portfolio` - Retrieve full portfolio
+- `GET /api/portfolio` - Retrieve full portfolio (current holdings)
 - `GET /api/portfolio/items` - List all items (paginated if needed)
 - `GET /api/portfolio/performance` - Calculate portfolio metrics
 
-### Item Management
-- `POST /api/portfolio/items` - Add new stock to portfolio
-- `GET /api/portfolio/items/{itemId}` - Get specific item
-- `PUT /api/portfolio/items/{itemId}` - Update item (volume, price)
-- `DELETE /api/portfolio/items/{itemId}` - Remove item from portfolio
+### Transaction Management
+- `POST /api/transactions` - Record a buy/sell transaction (updates portfolio items)
+- `GET /api/transactions` - List all transactions (paginated, optionally filtered by ticker)
+- `GET /api/transactions/{ticker}` - Get transaction history for specific ticker
+- `DELETE /api/transactions/{transactionId}` - Remove transaction and update portfolio item
 
 ### Price Data
 - `GET /api/prices/{ticker}` - Get current price for ticker
@@ -146,18 +151,19 @@ PortfolioManager/
 ### Phase 1: Backend API Foundation (Days 1-2)
 1. Initialize Python project with Flask/FastAPI
 2. Set up Firebase/Firestore connection
-3. Implement `PortfolioItem` and `Portfolio` models
+3. Implement `PortfolioItem` and `Transaction` models
 4. Create Firestore service layer with CRUD operations
 5. Implement endpoints: `GET /api/portfolio`, `GET /api/portfolio/items`
 6. Add basic error handling and logging
 7. **Deliverable:** Working API that retrieves empty portfolio
 
-### Phase 2: Add/Remove Items (Days 2-3)
-1. Implement `POST /api/portfolio/items` endpoint
-2. Implement `DELETE /api/portfolio/items/{itemId}` endpoint
-3. Add input validation (ticker format, volume > 0)
-4. Add error responses for duplicates/invalid data
-5. **Deliverable:** Can add and remove items via API (test with curl/Postman)
+### Phase 2: Transactions (Days 2-3)
+1. Implement `POST /api/transactions` endpoint (buy/sell)
+2. Implement transaction logic to update `PortfolioItem` quantity and cost basis
+3. Implement `GET /api/transactions` and `GET /api/transactions/{ticker}` endpoints
+4. Add input validation (ticker format, quantity > 0, type validation)
+5. Add error handling for invalid transactions (selling more than held)
+6. **Deliverable:** Can record transactions via API and portfolio items update accordingly
 
 ### Phase 3: Price Integration (Days 3-4)
 1. Integrate yfinance library for price fetching
