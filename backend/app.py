@@ -1,27 +1,34 @@
+import logging
+import os
+
+from dotenv import load_dotenv
 from flask import Flask
 from flask_cors import CORS
-from dotenv import load_dotenv
-import os
+
 from config import Config
+from routes.portfolio import portfolio_bp
+from routes.prices import prices_bp
 
 load_dotenv()
 
 app = Flask(__name__)
 app.config.from_object(Config)
 
+logging.basicConfig(
+    level=logging.DEBUG if app.config['DEBUG'] else logging.INFO,
+    format='[%(levelname)-5s] %(name)s: %(message)s',
+)
+
 CORS(app, origins=os.getenv('CORS_ORIGIN', 'http://localhost:3000'))
+
+app.register_blueprint(portfolio_bp)
+app.register_blueprint(prices_bp)
+
 
 @app.route('/health', methods=['GET'])
 def health_check():
     return {'status': 'healthy'}, 200
 
-@app.route('/api/portfolio', methods=['GET'])
-def get_portfolio():
-    return {'message': 'Portfolio endpoint - not implemented yet'}, 501
-
-@app.route('/api/portfolio/items', methods=['GET'])
-def get_portfolio_items():
-    return {'message': 'Portfolio items endpoint - not implemented yet'}, 501
 
 if __name__ == '__main__':
     debug = app.config['DEBUG']
