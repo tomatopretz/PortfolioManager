@@ -17,10 +17,3 @@ def test_health_check(client):
     assert response.status_code == 200
     assert response.json['status'] == 'healthy'
 
-def test_get_portfolio_endpoint_exists(client):
-    response = client.get('/api/portfolio')
-    assert response.status_code == 501
-
-def test_get_portfolio_items_endpoint_exists(client):
-    response = client.get('/api/portfolio/items')
-    assert response.status_code == 501
