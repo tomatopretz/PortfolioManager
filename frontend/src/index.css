@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --surface-1: #fcfcfb;
+  --surface-2: #f9f9f7;
+
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+
+  --series-1: #2a78d6;   /* blue */
+  --series-2: #eb6834;   /* orange */
+  --series-3: #1baf7a;   /* aqua */
+  --series-4: #eda100;   /* yellow */
+  --series-5: #e87ba4;   /* magenta */
+  --series-6: #008300;   /* green */
+  --series-7: #4a3aa7;   /* violet */
+  --series-8: #e34948;   /* red */
+
+  --series-other: #d9d9d5; /* gray for "Other" */
+
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+
+  --gridline: #e1e0d9;
+  --border: rgba(11, 11, 11, 0.10);
+  --delta-good: #006300;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-1: #1a1a19;
+    --surface-2: #0d0d0d;
+
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+
+    --series-1: #3987e5;   /* blue */
+    --series-2: #d95926;   /* orange */
+    --series-3: #199e70;   /* aqua */
+    --series-4: #c98500;   /* yellow */
+    --series-5: #d55181;   /* magenta */
+    --series-6: #008300;   /* green */
+    --series-7: #9085e9;   /* violet */
+    --series-8: #e66767;   /* red */
+
+    --series-other: #545450; /* gray for "Other" */
+
+    --gridline: #2c2c2a;
+    --border: rgba(255, 255, 255, 0.10);
+    --delta-good: #0ca30c;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background-color: var(--surface-2);
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+/* Recharts-specific styling */
+.recharts-wrapper {
+  background-color: transparent !important;
+}
+
+.recharts-surface {
+  background-color: var(--surface-1) !important;
+}
+
+.recharts-text {
+  fill: var(--text-secondary);
+}
+
+.recharts-cartesian-axis-tick {
+  fill: var(--text-muted);
+  font-size: 12px;
+}
+
+.recharts-default-tooltip {
+  background-color: var(--surface-1) !important;
+  border: 1px solid var(--gridline) !important;
+  border-radius: 4px;
+  padding: 8px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.recharts-tooltip-label {
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.recharts-tooltip-item {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
