@@ -46,10 +46,10 @@ Transaction {
 - `GET /api/portfolio/performance` - Calculate portfolio metrics
 
 ### Transaction Management
-- `POST /api/transactions` - Record a buy/sell transaction (updates portfolio items)
+- `POST /api/portfolio/add-asset` - Buy/add a holding (creates/updates PortfolioItem, deducts cash if useCash, records Transaction)
+- `POST /api/portfolio/remove-asset` - Sell/remove a holding (updates PortfolioItem, adds proceeds to cash, records Transaction)
 - `GET /api/transactions` - List all transactions (paginated, optionally filtered by ticker)
 - `GET /api/transactions/{ticker}` - Get transaction history for specific ticker
-- `DELETE /api/transactions/{transactionId}` - Remove transaction and update portfolio item
 
 ### Price Data
 - `GET /api/prices/{ticker}` - Get current price for ticker
@@ -57,9 +57,9 @@ Transaction {
 
 ---
 
-## 2A. BUSINESS LOGIC FOR BUY and SELL transactions - POST/transactions
+## 2A. BUSINESS LOGIC FOR BUY and SELL - POST /api/portfolio/add-asset and /remove-asset
 
-**Note:** All steps within ADD and DELETE flows must be atomic—wrap in Firestore transactions so if any step fails, all changes rollback.
+**Note:** All steps within ADD and REMOVE flows must be atomic—wrap in Firestore transactions so if any step fails, all changes rollback. There is no transaction-reversal endpoint; transactions are immutable once recorded.
 
 ### ADD (Buy Stock or Add Existing Holdings)
 **Preconditions:**
@@ -79,7 +79,7 @@ Transaction {
 4. Create Transaction record with type='buy', portfolioItemId, useCash=true/false
 5. Update lastUpdated timestamps
 
-### DELETE (Sell Stock)
+### REMOVE (Sell Stock)
 **Preconditions:**
 - PortfolioItem exists with sufficient quantity
 
@@ -194,8 +194,8 @@ PortfolioManager/
 ## 5. PRIORITIZED IMPLEMENTATION ROADMAP
 
 ### Phase 1: Backend Models & Firestore Setup (Days 1-2)
-1. ✅ Initialize Python project with Flask
-2. ✅ Define `PortfolioItem` and `Transaction` Pydantic models
+1. Initialize Python project with Flask
+2.  Define `PortfolioItem` and `Transaction` Pydantic models
 3. Set up Firebase/Firestore connection
 4. Create Firestore service layer with CRUD operations
 5. Implement endpoints: `GET /api/portfolio`, `GET /api/portfolio/items`
@@ -203,7 +203,7 @@ PortfolioManager/
 7. **Deliverable:** Working API that retrieves empty portfolio
 
 ### Phase 2: Transactions (Days 2-3)
-1. Implement `POST /api/transactions` endpoint (buy/sell)
+1. Implement `POST /api/portfolio/add-asset` and `POST /api/portfolio/remove-asset` endpoints (buy/sell)
 2. Implement transaction logic to update `PortfolioItem` quantity and cost basis
 3. Implement `GET /api/transactions` and `GET /api/transactions/{ticker}` endpoints
 4. Add input validation (ticker format, quantity > 0, type validation)
@@ -229,7 +229,7 @@ PortfolioManager/
 ### Phase 5: Frontend - Add/Remove UI (Day 5)
 1. Build `ItemForm` modal component
 2. Implement form validation matching backend
-3. Connect to POST/DELETE endpoints
+3. Connect to add-asset/remove-asset endpoints
 4. Add success/error toast notifications
 5. Refresh list after operations
 6. **Deliverable:** Full CRUD UI functional
