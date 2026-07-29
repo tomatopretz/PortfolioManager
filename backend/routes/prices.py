@@ -53,9 +53,11 @@ def get_price_on_date(ticker: str, date: str) -> tuple[dict, int]:
 
     try:
         parsed_date = datetime.strptime(date, DATE_FORMAT)
-        price = price_service.get_price_on_date(ticker, parsed_date)
     except ValueError:
         return {'error': f'date must be in {DATE_FORMAT_DISPLAY} format'}, 422
+
+    try:
+        price = price_service.get_price_on_date(ticker, parsed_date)
     except PriceNotFoundError as e:
         return {'error': str(e)}, 404
     except Exception as e:
