@@ -1,4 +1,4 @@
-from .portfolio_item import PortfolioItem
-from .transaction import Transaction
+from .PortfolioItemDTO import PortfolioItemDTO
+from .TransactionDTO import TransactionDTO
 
-__all__ = ['PortfolioItem', 'Transaction']
+__all__ = ['PortfolioItemDTO', 'TransactionDTO']

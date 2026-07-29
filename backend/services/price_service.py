@@ -25,7 +25,7 @@ def _sanitize_price(value) -> float:
     return round(value, 2)
 
 
-def get_current_prices(tickers: list[str]) -> dict[str, float]:
+def list_current_prices(tickers: list[str]) -> dict[str, float]:
     """Get the latest available closing price for one or more tickers in a single request."""
     data = yf.download(tickers, period='1d', group_by='ticker', progress=False)
     prices = {}
@@ -50,5 +50,24 @@ def get_price_on_date(ticker: str, date: datetime) -> float:
     except (KeyError, IndexError, ValueError) as e:
         logger.warning('No price data for ticker=%s date=%s: %s', ticker, date.date(), e)
         raise PriceNotFoundError(f"No price data found for '{ticker}' on {date.date()}") from None
+
+
+def get_current_price(ticker: str) -> float:
+    """Get the latest available closing price for a single ticker."""
+    history = yf.Ticker(ticker).history(period='1d')
+
+    try:
+        close = history['Close'].iloc[-1]
+        return _sanitize_price(close)
+    except (KeyError, IndexError, ValueError) as e:
+        logger.warning('No current price for ticker=%s: %s', ticker, e)
+        raise PriceNotFoundError(f"No price data found for '{ticker}'") from None
+
+
+def get_ticker_price(ticker: str, date: datetime | None = None) -> float:
+    """Get the current price for a ticker, or its price on a specific date if `date` is given."""
+    if date is None:
+        return get_current_price(ticker)
+    return get_price_on_date(ticker, date)
 
 

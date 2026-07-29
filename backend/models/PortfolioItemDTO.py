@@ -1,8 +1,10 @@
-from pydantic import BaseModel
-from typing import Optional
 from datetime import datetime
+from typing import Optional
 
-class PortfolioItem(BaseModel):
+from pydantic import BaseModel
+
+
+class PortfolioItemDTO(BaseModel):
     id: Optional[str] = None
     ticker: str
     assetType: str  # 'stock', 'bond', etc

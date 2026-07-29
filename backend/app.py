@@ -6,15 +6,16 @@ from flask import Flask
 from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 
-from config import Config
+from config import config
 from openapi import api
 from routes.portfolio import portfolio_bp
 from routes.prices import prices_bp
+from routes.transactions import transactions_bp
 
 load_dotenv()
 
 app = Flask(__name__)
-app.config.from_object(Config)
+app.config.from_object(config[os.getenv('FLASK_ENV', 'default')])
 
 logging.basicConfig(
     level=logging.DEBUG if app.config['DEBUG'] else logging.INFO,
@@ -25,6 +26,7 @@ CORS(app, origins=os.getenv('CORS_ORIGIN', 'http://localhost:3000'))
 
 app.register_blueprint(portfolio_bp)
 app.register_blueprint(prices_bp)
+app.register_blueprint(transactions_bp)
 api.register(app)  # UI served at /apidocs/swagger
 
 
@@ -36,4 +38,4 @@ def health_check():
 if __name__ == '__main__':
     debug = app.config['DEBUG']
     port = int(os.getenv('API_PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    app.run(host='0.0.0.0', port=port, debug=debug, reloader_type='stat')
