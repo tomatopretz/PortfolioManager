@@ -100,6 +100,67 @@ Transaction {
 
 ## 3. FRONTEND COMPONENT STRUCTURE
 
+### Current Structure (✅ Implemented)
+```
+frontend/
+├── index.html
+├── package.json
+├── vite.config.js (Vite + React plugin configured)
+├── tailwind.config.js (custom color theme)
+├── postcss.config.js (@tailwindcss/postcss configured)
+├── .env.example (VITE_API_URL, VITE_USE_MOCKS)
+├── src/
+│   ├── main.jsx (React 18 entry point)
+│   ├── App.jsx (Router setup)
+│   ├── index.css (Tailwind + CSS custom properties for palette)
+│   ├── theme/
+│   │   └── colors.js (dataviz palette: categorical/sequential/status colors)
+│   ├── services/ (✅ Complete)
+│   │   ├── api.js (fetch wrapper, error handling)
+│   │   ├── portfolioService.js (real API calls)
+│   │   ├── mockPortfolioService.js (mock data with simulated latency)
+│   │   ├── mockData.js (fixtures: holdings, transactions, performance series)
+│   │   └── index.js (switchable service interface via VITE_USE_MOCKS)
+│   ├── components/
+│   │   ├── layout/ (✅ Complete)
+│   │   │   ├── Header.jsx (logo, cash/total stats, Buy/Sell buttons)
+│   │   │   ├── NavMenu.jsx (Dashboard | Holdings | Analytics with active styling)
+│   │   │   └── AppLayout.jsx (Header + NavMenu + Outlet)
+│   │   ├── dashboard/ (🚧 In progress)
+│   │   │   ├── SummaryStats.jsx (KPI row: Total Value, Total Return, Cash Balance)
+│   │   │   ├── AllocationPieChart.jsx (Asset-type breakdown, Recharts)
+│   │   │   ├── PerformanceChart.jsx (Recharts AreaChart, single series)
+│   │   │   ├── TimeRangeFilter.jsx (1W/1M/3M/YTD/1Y/All buttons)
+│   │   │   └── HoldingsPreview.jsx (Top 5 holdings table preview)
+│   │   ├── holdings/ (🔜 Planned)
+│   │   │   ├── HoldingsTable.jsx (full table with sort/filter)
+│   │   │   └── HoldingRow.jsx
+│   │   ├── analytics/ (🔜 Planned)
+│   │   │   ├── PerformanceChartFull.jsx
+│   │   │   └── MetricsBreakdown.jsx (per-asset-type table)
+│   │   ├── transactions/ (🔜 Planned)
+│   │   │   ├── TransactionModal.jsx (Buy/Sell modal shell)
+│   │   │   ├── BuyForm.jsx
+│   │   │   └── SellForm.jsx
+│   │   └── common/ (🔜 Planned)
+│   │       ├── Modal.jsx (generic modal primitive)
+│   │       ├── StatTile.jsx (value + delta per dataviz spec)
+│   │       ├── ChartCard.jsx (figure wrapper with title, table-view toggle)
+│   │       ├── Legend.jsx (categorical legend, toggle-to-isolate)
+│   │       ├── Tooltip.jsx (shared tooltip: value bold, label secondary)
+│   │       └── LoadingSpinner.jsx
+│   ├── hooks/ (🔜 Planned)
+│   │   └── usePortfolio.js (fetch + cache portfolio/performance, buy/sell mutators)
+│   ├── context/ (🔜 Planned)
+│   │   └── PortfolioContext.jsx (provides usePortfolio() app-wide)
+│   └── pages/ (✅ Stubs created)
+│       ├── DashboardPage.jsx (composes dashboard components)
+│       ├── HoldingsPage.jsx (composes HoldingsTable)
+│       └── AnalyticsPage.jsx (composes PerformanceChartFull + MetricsBreakdown)
+└── tests/ (placeholder)
+```
+
+### Original Planned Structure (Reference)
 ```
 src/
 ├── components/
@@ -132,6 +193,8 @@ src/
 ├── App.jsx
 └── index.js
 ```
+
+**Note:** Current structure aligns with original plan. Uses Vite instead of Create React App (faster, more modern), and `fetch` instead of `axios` (fewer dependencies, same functionality).
 
 ---
 
@@ -195,7 +258,7 @@ PortfolioManager/
 
 ### Phase 1: Backend Models & Firestore Setup (Days 1-2)
 1. Initialize Python project with Flask
-2.  Define `PortfolioItem` and `Transaction` Pydantic models
+2. Define `PortfolioItem` and `Transaction` Pydantic models
 3. Set up Firebase/Firestore connection
 4. Create Firestore service layer with CRUD operations
 5. Implement endpoints: `GET /api/portfolio`, `GET /api/portfolio/items`
@@ -217,37 +280,67 @@ PortfolioManager/
 4. Implement `POST /api/prices/refresh` for batch updates
 5. **Deliverable:** API returns current prices for holdings
 
-### Phase 4: Frontend - Browse & Display (Days 4-5)
-1. Create React app structure with routing
-2. Implement `usePortfolio` hook for state management
-3. Build `PortfolioContainer` and `PortfolioList` components
-4. Implement `ItemTable` and `ItemRow` components
-5. Connect to backend API endpoints
-6. Add loading states and error handling
-7. **Deliverable:** Browse page shows portfolio items with prices
+### Phase 4: Frontend Setup & Layout (Days 4-5) — ✅ COMPLETED
+1. ✅ Create React app with Vite (modern tooling, faster build/dev)
+2. ✅ Install and configure React Router, Recharts, Tailwind CSS
+3. ✅ Set up theme colors from dataviz palette (8-hue categorical, sequential blue, status colors)
+4. ✅ Create service layer with mock data and switchable real/mock implementations
+5. ✅ Build `AppLayout` with `Header` (logo, cash/total quick stats, Buy/Sell buttons) and `NavMenu`
+6. ✅ Set up routing: Dashboard, Holdings, Analytics pages
+7. ✅ Dev server running on port 3000 with HMR
+8. ✅ **Deliverable:** Functional layout with navigation; ready for dashboard content
 
-### Phase 5: Frontend - Add/Remove UI (Day 5)
-1. Build `ItemForm` modal component
-2. Implement form validation matching backend
-3. Connect to add-asset/remove-asset endpoints
-4. Add success/error toast notifications
-5. Refresh list after operations
-6. **Deliverable:** Full CRUD UI functional
+### Phase 5: Frontend Dashboard & Charts (Days 5-6) — 🔜 NEXT
+1. Create `usePortfolio` hook for portfolio state management (fetch items, performance, buy/sell)
+2. Implement `PortfolioContext` to share state across pages
+3. Build dashboard components:
+   - `SummaryStats`: KPI row with Total Value, Total Return ($ + %), Cash Balance (StatTile spec)
+   - `AllocationPieChart`: Asset-type breakdown with categorical palette, legend, direct labels, tooltip, table-view toggle
+   - `PerformanceChart`: Single-series area chart (portfolio value over time) with TimeRangeFilter (1W/1M/3M/YTD/1Y/All), crosshair+tooltip
+   - `HoldingsPreview`: Top 5 holdings table with "View all" link to Holdings page
+4. Wire chart interactions: time-range filter re-fetches/re-slices performance data
+5. Validate pie and performance charts against dataviz palette (6-check validator)
+6. **Deliverable:** Dashboard page fully functional with mock data
 
-### Phase 6: Performance Visualization (Days 6-7)
-1. Calculate portfolio metrics (total value, gain/loss)
-2. Build `PerformanceChart` with Recharts library
-3. Implement `PerformanceMetrics` card display
-4. Add `GET /api/portfolio/performance` endpoint
-5. **Deliverable:** Performance page with charts and stats
+### Phase 6: Frontend Transaction UI & Holdings/Analytics Pages (Days 6-7)
+1. Build transaction UI:
+   - `Modal` primitive (overlay, focus trap, click-to-close, Esc key)
+   - `BuyForm`: ticker, assetType, quantity, price, useCash checkbox with validation
+   - `SellForm`: ticker select from holdings, quantity, price with max-held validation
+   - Wire to Header buy/sell buttons with state management
+2. Build Holdings page:
+   - Full `HoldingsTable` with columns (ticker, assetType, qty, costBasis, price, marketValue, gainLoss $/%)
+   - Client-side sort by column, text filter by ticker
+   - Reuse `usePortfolio()` context (no refetch)
+3. Build Analytics page:
+   - Larger `PerformanceChartFull` (full-width, taller) with same time-range filter
+   - `MetricsBreakdown`: per-asset-type table (costBasis vs. marketValue vs. return %)
+4. **Deliverable:** Full CRUD UI + secondary pages functional with mock data
 
-### Phase 7: Polish & Deployment (Days 7-8)
+### Phase 7: Backend Endpoints Implementation (Days 7-8)
+1. Implement `POST /api/portfolio/add-asset` (buy) with full transaction logic and Firestore atomicity
+2. Implement `POST /api/portfolio/remove-asset` (sell) with validation and cash handling
+3. Implement `GET /api/portfolio/performance` endpoint returning performance series by time range
+4. Add input validation and error handling across all endpoints
+5. Test endpoints with curl/Postman before frontend integration
+6. **Deliverable:** All core API endpoints fully implemented
+
+### Phase 8: Frontend-Backend Integration & Testing (Days 8-9)
+1. Switch `services/index.js` from mock to real API (toggle `VITE_USE_MOCKS=false`)
+2. Test buy/sell flows end-to-end (transaction creation, portfolio update, UI refresh)
+3. Test time-range filtering on performance endpoint
+4. Add loading states and error handling in UI
+5. Test data consistency across pages and after refresh
+6. **Deliverable:** Full app functional with real backend
+
+### Phase 9: Polish, Testing & Deployment (Days 9-10)
 1. Code cleanup and refactoring
 2. Comprehensive testing (unit + integration)
-3. Documentation (API docs, setup guide)
-4. Deploy backend (Cloud Run, Heroku, or similar)
-5. Deploy frontend (Vercel, Netlify, or similar)
-6. **Deliverable:** Live application
+3. Documentation (API docs, setup guide, frontend component docs)
+4. Deploy backend (Cloud Run, Railway, or Render)
+5. Deploy frontend (Vercel, Netlify)
+6. Monitor for errors; iterate based on real-world usage
+7. **Deliverable:** Live application
 
 ---
 
@@ -343,11 +436,64 @@ REACT_APP_FIREBASE_CONFIG={...}
 
 ---
 
-## Critical Files for Implementation
+## 9. CURRENT STATUS & RECENT PROGRESS (2026-07-28)
 
-- `/backend/app.py` - Main Flask/FastAPI application entry point
-- `/backend/services/firestore_service.py` - Firestore CRUD operations layer
+### Backend
+- Phase 1-3 Status: Models and Firestore setup exist; price endpoints implemented
+- Core API endpoints: `GET /api/portfolio`, `GET /api/prices` available (transaction endpoints still stubbed)
+- **Next Priority**: Phase 7 — Implement `POST /api/portfolio/add-asset`, `POST /api/portfolio/remove-asset`, `GET /api/portfolio/performance` with full buy/sell logic and Firestore atomicity
+
+### Frontend
+- ✅ **Phase 4 Complete**: React + Vite project fully scaffolded
+  - React 18, Vite, React Router, Recharts, Tailwind CSS configured
+  - Service layer with mock data and switchable real/mock implementations (toggle `VITE_USE_MOCKS` env var)
+  - Layout components (Header, NavMenu, AppLayout) with routing
+  - Theme colors from dataviz palette applied to CSS custom properties (light mode; dark mode deferred)
+  - Dev server running on port 3000 with HMR
+  - Three page stubs (Dashboard, Holdings, Analytics) ready for content
+- **Phase 5 (Dashboard) Next**: Build usePortfolio hook, PortfolioContext, and dashboard components (SummaryStats, AllocationPieChart, PerformanceChart, TimeRangeFilter, HoldingsPreview)
+- **Phase 6 (Transactions & Secondary Pages) After Phase 5**: Build Modal, BuyForm, SellForm, and complete Holdings/Analytics pages
+
+### Next Immediate Tasks (Priority Order)
+1. **Frontend Dashboard** (2-3 hours):
+   - Create `usePortfolio` hook + `PortfolioContext`
+   - Build `SummaryStats`, `AllocationPieChart`, `PerformanceChart`, `TimeRangeFilter`, `HoldingsPreview`
+   - Integrate mock data; verify charts render correctly with dataviz palette
+   
+2. **Frontend Transaction & Secondary Pages** (2-3 hours):
+   - Build `Modal`, `BuyForm`, `SellForm` components
+   - Implement Holdings and Analytics pages
+   - Wire up header Buy/Sell buttons to modals
+   
+3. **Backend Buy/Sell & Performance** (Parallel, 2-3 hours):
+   - Implement `POST /api/portfolio/add-asset` with full transaction logic and Firestore atomicity
+   - Implement `POST /api/portfolio/remove-asset` with validation
+   - Implement `GET /api/portfolio/performance` with time-range filtering
+   
+4. **Integration & Testing** (1-2 hours):
+   - Switch frontend from mock to real API
+   - Test buy/sell, performance filtering, data consistency end-to-end
+   - Add loading/error states in UI
+
+5. **Deployment** (1-2 hours):
+   - Deploy backend (Cloud Run or Railway)
+   - Deploy frontend (Vercel)
+
+### Critical Files for Implementation
+
+**Backend:**
+- `/backend/app.py` - Main Flask application entry point
+- `/backend/services/firestore_service.py` - Firestore CRUD operations
 - `/backend/services/price_service.py` - Yahoo Finance integration
-- `/frontend/src/hooks/usePortfolio.js` - Portfolio state management hook
-- `/frontend/src/components/Portfolio/PortfolioContainer.jsx` - Main portfolio UI container
 - `/backend/routes/portfolio.py` - Core API endpoint definitions
+- `/backend/routes/prices.py` - Price endpoints (implemented)
+- `/backend/models/portfolio_item.py` - PortfolioItem Pydantic model
+- `/backend/models/transaction.py` - Transaction Pydantic model
+
+**Frontend:**
+- `/frontend/src/hooks/usePortfolio.js` - Portfolio state management hook (next)
+- `/frontend/src/context/PortfolioContext.jsx` - Global state provider (next)
+- `/frontend/src/components/dashboard/AllocationPieChart.jsx` - Pie chart (next)
+- `/frontend/src/components/dashboard/PerformanceChart.jsx` - Area chart (next)
+- `/frontend/src/components/transactions/TransactionModal.jsx` - Buy/Sell modal (next)
+- `/frontend/src/services/index.js` - Switchable service layer (done, ready for toggle)
