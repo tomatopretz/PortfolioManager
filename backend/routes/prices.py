@@ -32,7 +32,7 @@ api.hide_from_schemas(MultiTickerPricesRequestDTO, SingleTickerDateRequestDTO)
     tags=['Prices'],
 )
 def get_current_prices() -> tuple[dict, int]:
-    """Get current prices for one or more tickers."""
+    """Get current prices for one or more tickers, specified as a comma-separated list in the `tickers` query param."""
     tickers = price_service.parse_tickers(request.context.query.tickers)
 
     try:
@@ -55,7 +55,7 @@ def get_current_prices() -> tuple[dict, int]:
     tags=['Prices'],
 )
 def get_ticker_price(ticker: str) -> tuple[dict, int]:
-    """Get the current price for a ticker, or its price on a specific date if `date` is given."""
+    """Get the current price for one ticker, optionally filtering it to a specific date if `date` is given."""
     ticker = ticker.upper()
     date_str = request.context.query.date
 

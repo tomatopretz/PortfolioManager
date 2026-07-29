@@ -28,9 +28,9 @@ def get_portfolio() -> tuple[list[dict], int]:
     return [item.model_dump() for item in items], 200
 
 
-# POST /api/portfolio - record a buy or sell (`type` in the body picks the flow)
-@portfolio_bp.route('', methods=['POST'])
-@api.validate(body=PortfolioTransactionRequestDTO, resp=Response(HTTP_501=ErrorResultDTO), tags=['Portfolio'])
-def record_transaction() -> tuple[dict, int]:
-    """Record a buy or sell (`type` in the body picks the flow)."""
-    return {'error': 'Portfolio transaction endpoint - not implemented yet'}, 501
+# # POST /api/portfolio - record a buy or sell (`type` in the body picks the flow)
+# @portfolio_bp.route('', methods=['POST'])
+# @api.validate(body=PortfolioTransactionRequestDTO, resp=Response(HTTP_501=ErrorResultDTO), tags=['Portfolio'])
+# def record_transaction() -> tuple[dict, int]:
+#     """Record a buy or sell (`type` in the body picks the flow)."""
+#     return {'error': 'Portfolio transaction endpoint - not implemented yet'}, 501
