@@ -6,6 +6,10 @@ function HoldingsPreview({ items }) {
     .sort((a, b) => b.marketValue - a.marketValue)
     .slice(0, 5)
 
+  if (holdings.length === 0) {
+    return null
+  }
+
   return (
     <div
       className="rounded-lg border p-6"

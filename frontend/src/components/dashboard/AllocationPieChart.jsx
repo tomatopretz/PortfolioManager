@@ -17,7 +17,7 @@ function AllocationPieChart({ items }) {
 
   const assetTypes = {}
   items.forEach((item) => {
-    if (item.assetType !== 'cash') {
+    if (item.assetType !== 'cash' && item.marketValue > 0) {
       assetTypes[item.assetType] = (assetTypes[item.assetType] || 0) + item.marketValue
     }
   })
@@ -29,6 +29,20 @@ function AllocationPieChart({ items }) {
   }))
 
   const total = data.reduce((sum, item) => sum + item.value, 0)
+
+  if (data.length === 0) {
+    return (
+      <div
+        className="rounded-lg border p-6 flex items-center justify-center h-96"
+        style={{
+          backgroundColor: 'var(--surface-1)',
+          borderColor: 'var(--gridline)',
+        }}
+      >
+        <p style={{ color: 'var(--text-muted)' }}>No allocation data available</p>
+      </div>
+    )
+  }
 
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
