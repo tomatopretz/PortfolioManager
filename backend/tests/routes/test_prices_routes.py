@@ -43,7 +43,7 @@ def test_get_current_prices_returns_404_when_none_resolve(mock_get_current_price
 
 def test_get_current_prices_requires_tickers_param(client):
     response = client.get('/api/prices')
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
 @patch('routes.prices.price_service.get_current_prices')
@@ -53,20 +53,29 @@ def test_get_current_prices_returns_502_on_failure(mock_get_current_prices, clie
     assert response.status_code == 502
 
 
-def test_get_price_on_date_requires_date_param(client):
+def test_get_price_on_date_requires_date_segment(client):
+    # date is now a required path segment (/api/prices/<ticker>/<date>), not a query param,
+    # so omitting it entirely means no route matches
     response = client.get('/api/prices/AAPL')
-    assert response.status_code == 400
+    assert response.status_code == 404
 
 
 def test_get_price_on_date_rejects_invalid_date_format(client):
-    response = client.get('/api/prices/AAPL?date=not-a-date')
-    assert response.status_code == 400
+    response = client.get('/api/prices/AAPL/not-a-date')
+    assert response.status_code == 422
+
+
+def test_get_price_on_date_rejects_unix_timestamp_style_input(client):
+    # strptime requires the exact YYYY-MM-DD shape, so a bare number like this is
+    # rejected outright rather than silently reinterpreted as some other date
+    response = client.get('/api/prices/AAPL/201111')
+    assert response.status_code == 422
 
 
 @patch('routes.prices.price_service.get_price_on_date')
 def test_get_price_on_date_returns_price(mock_get_price_on_date, client):
     mock_get_price_on_date.return_value = 99.0
-    response = client.get('/api/prices/AAPL?date=2026-07-20')
+    response = client.get('/api/prices/AAPL/2026-07-20')
     assert response.status_code == 200
     assert response.json == {'ticker': 'AAPL', 'date': '2026-07-20', 'price': 99.0}
 
@@ -74,12 +83,12 @@ def test_get_price_on_date_returns_price(mock_get_price_on_date, client):
 @patch('routes.prices.price_service.get_price_on_date')
 def test_get_price_on_date_returns_404_when_not_found(mock_get_price_on_date, client):
     mock_get_price_on_date.side_effect = PriceNotFoundError("No price data found for 'AAPL' on 2026-07-20")
-    response = client.get('/api/prices/AAPL?date=2026-07-20')
+    response = client.get('/api/prices/AAPL/2026-07-20')
     assert response.status_code == 404
 
 
 @patch('routes.prices.price_service.get_price_on_date')
 def test_get_price_on_date_returns_502_on_unexpected_error(mock_get_price_on_date, client):
     mock_get_price_on_date.side_effect = ConnectionError('Failed to connect to Yahoo Finance')
-    response = client.get('/api/prices/AAPL?date=2026-07-20')
+    response = client.get('/api/prices/AAPL/2026-07-20')
     assert response.status_code == 502

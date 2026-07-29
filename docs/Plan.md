@@ -41,65 +41,155 @@ Transaction {
 ## 2. CORE API ENDPOINTS & IMPLEMENTATION ARCHITECTURE
 
 ### Portfolio Operations
-- `GET /api/portfolio` - Retrieve all portfolio items (current holdings)
-- `GET /api/portfolio/items/{ticker}` - Get specific portfolio item by ticker
+- `GET /api/portfolio` - Retrieve all portfolio items (current holdings and calculate market value and profit and loss (using cost basis and current price from yf))
+- `GET /api/portfolio/{ticker}` - Get specific portfolio item by ticker
 - `GET /api/portfolio/performance` - Calculate portfolio metrics
+- `POST /api/portfolio` - Record a buy or sell (creates/updates PortfolioItem, adjusts CASH, records Transaction). The `type` field (`"buy"` | `"sell"`) in the request body picks the flow — see section 
 
 ### Transaction Management
-- `POST /api/portfolio/add-asset` - Buy/add a holding (creates/updates PortfolioItem, deducts cash if useCash, records Transaction)
-- `POST /api/portfolio/remove-asset` - Sell/remove a holding (updates PortfolioItem, adds proceeds to cash, records Transaction)
-- `GET /api/transactions` - List all transactions (paginated, optionally filtered by ticker)
-- `GET /api/transactions/{ticker}` - Get transaction history for specific ticker
+- `GET /api/transactions` - List all transactions (paginated, optionally filtered via `?ticker=`)
 
 ### Price Data
-- `GET /api/prices/{ticker}` - Get current price for ticker
-- `POST /api/prices/refresh` - Refresh all prices from Yahoo Finance
+- `GET /api/prices?tickers=AAPL,GOOG` - Get current prices for one or more tickers
+- `GET /api/prices/{ticker}/{date}` - Get the price for one ticker on one specific date (YYYY-MM-DD)
+- `POST /api/prices` - Refresh cached prices from Yahoo Finance
 
 ---
 
-## 2A. BUSINESS LOGIC FOR BUY and SELL - POST /api/portfolio/add-asset and /remove-asset
+## 2A. BUSINESS LOGIC FOR BUY/SELL and ADD/REMOVE CASH - POST /api/portfolio
 
 **Note:** All steps within ADD and REMOVE flows must be atomic—wrap in a database transaction so if any step fails, all changes rollback. There is no transaction-reversal endpoint; transactions are immutable once recorded.
 
-### ADD (Buy Stock or Add Existing Holdings)
+### Request Parameters — POST /api/portfolio
+
+| Field | Type | Stock/Bond (type="buy") | Stock/Bond (type="sell") | Cash (type="buy", Deposit) | Cash (type="sell", Withdraw) |
+|---|---|---|---|---|---|
+| type | string | required, `"buy"` | required, `"sell"` | required, `"buy"` | required, `"sell"` |
+| ticker | string | required, e.g. "AAPL" | required, e.g. "AAPL" | required, fixed `"CASH"` | required, fixed `"CASH"` |
+| assetType | string | required, e.g. "stock", "bond" | required, e.g. "stock", "bond" | required, fixed `"cash"` | required, fixed `"cash"` |
+| quantity | number | required — shares to buy | required — shares to sell | required — cash amount to deposit | required — cash amount to withdraw |
+| price | number | required — price per share | required — price per share | not sent / ignored (treated as 1) | not sent / ignored (treated as 1) |
+| useCash | boolean | required — `true` deducts purchase amount from CASH, `false` skips cash check | not applicable — sells always credit proceeds to CASH (per the Transaction entity, sells always record `useCash=true`) | not sent / ignored (deposit never deducts CASH) | not applicable (withdrawing cash never credits itself) |
+
+### ADD Flow (type="buy": Buy Stock/Bond OR Deposit Cash)
 **Preconditions:**
-- None (useCash determines cash handling)
+- None (useCash determines cash handling for stock/bond; not applicable for cash deposit)
 
 **Flow:**
-1. **If `useCash: true`:**
+1. Branch on `ticker`:
+   - **If `ticker === "CASH"`** → go to step 2 (Cash Deposit)
+   - **Else** → go to step 3 (Stock/Bond Buy)
+2. **Cash Deposit path:**
+   - Fetch the CASH PortfolioItem (create it if this is the first-ever deposit)
+   - `cash.quantity += quantity`
+   - `cash.costBasis += quantity` (cash costBasis is always 1:1 with quantity)
+   - Create Transaction record: `type='buy'`, `portfolioItemId=CASH item id`, `quantity`, `price=1`, `useCash=false`
+   - Update `lastUpdated` timestamp → **done**, skip steps 3-6
+3. **Stock/Bond Buy path — if `useCash: true`:**
    - Fetch CASH item, verify balance ≥ purchase amount
    - Deduct from CASH: `cash.quantity -= (quantity × price)`
-2. **If `useCash: false`:**
+4. **If `useCash: false`:**
    - Skip cash balance check (user tracking existing holdings)
-3. Check if PortfolioItem exists for ticker + assetType:
+5. Check if PortfolioItem exists for ticker + assetType:
    - **If exists:** Update quantity and costBasis
      - `new quantity = existing quantity + bought quantity`
      - `new costBasis = existing costBasis + (bought quantity × price)`
    - **If not exists:** Create new PortfolioItem
-4. Create Transaction record with type='buy', portfolioItemId, useCash=true/false
-5. Update lastUpdated timestamps
+6. Create Transaction record with type='buy', portfolioItemId, useCash=true/false
+7. Update lastUpdated timestamps
 
-### REMOVE (Sell Stock)
+### REMOVE Flow (Sell Stock/Bond OR Withdraw Cash)
 **Preconditions:**
-- PortfolioItem exists with sufficient quantity
+- Stock/bond: PortfolioItem exists with sufficient quantity
+- Cash: CASH PortfolioItem balance ≥ withdrawal amount
 
 **Flow:**
-1. Fetch PortfolioItem to sell, verify quantity ≥ amount to sell
-2. Calculate proceeds = `quantity sold × price per share`
-3. Add to CASH: `cash.quantity += proceeds`
-4. Update stock PortfolioItem:
+1. Branch on `ticker`:
+   - **If `ticker === "CASH"`** → go to step 2 (Cash Withdrawal)
+   - **Else** → go to step 3 (Stock/Bond Sell)
+2. **Cash Withdrawal path:**
+   - Fetch CASH PortfolioItem, verify `cash.quantity ≥ quantity` requested
+   - `cash.quantity -= quantity`
+   - `cash.costBasis -= quantity`
+   - Create Transaction record: `type='sell'`, `portfolioItemId=CASH item id`, `quantity`, `price=1`, `useCash=false`
+   - Update `lastUpdated` timestamp → **done**, skip steps 3-7
+3. **Stock/Bond Sell path:** Fetch PortfolioItem to sell, verify quantity ≥ amount to sell
+4. Calculate proceeds = `quantity sold × price per share`
+5. Add to CASH: `cash.quantity += proceeds`
+6. Update stock PortfolioItem:
    - Calculate `costBasis per share = existing costBasis / existing quantity`
    - `new costBasis = costBasis per share × new quantity`
    - `new quantity = existing quantity - sold quantity`
-5. Create Transaction record with type='sell', portfolioItemId, useCash=true
-6. If new quantity = 0, optionally delete PortfolioItem
-7. Update lastUpdated timestamps
+7. Create Transaction record with type='sell', portfolioItemId, useCash=true
+8. If new quantity = 0, optionally delete PortfolioItem
+9. Update lastUpdated timestamps
 
 ---
 
 
 ## 3. FRONTEND COMPONENT STRUCTURE
 
+### Current Structure (✅ Implemented)
+```
+frontend/
+├── index.html
+├── package.json
+├── vite.config.js (Vite + React plugin configured)
+├── tailwind.config.js (custom color theme)
+├── postcss.config.js (@tailwindcss/postcss configured)
+├── .env.example (VITE_API_URL, VITE_USE_MOCKS)
+├── src/
+│   ├── main.jsx (React 18 entry point)
+│   ├── App.jsx (Router setup)
+│   ├── index.css (Tailwind + CSS custom properties for palette)
+│   ├── theme/
+│   │   └── colors.js (dataviz palette: categorical/sequential/status colors)
+│   ├── services/ (✅ Complete)
+│   │   ├── api.js (fetch wrapper, error handling)
+│   │   ├── portfolioService.js (real API calls)
+│   │   ├── mockPortfolioService.js (mock data with simulated latency)
+│   │   ├── mockData.js (fixtures: holdings, transactions, performance series)
+│   │   └── index.js (switchable service interface via VITE_USE_MOCKS)
+│   ├── components/
+│   │   ├── layout/ (✅ Complete)
+│   │   │   ├── Header.jsx (logo, cash/total stats, Buy/Sell buttons)
+│   │   │   ├── NavMenu.jsx (Dashboard | Holdings | Analytics with active styling)
+│   │   │   └── AppLayout.jsx (Header + NavMenu + Outlet)
+│   │   ├── dashboard/ (🚧 In progress)
+│   │   │   ├── SummaryStats.jsx (KPI row: Total Value, Total Return, Cash Balance)
+│   │   │   ├── AllocationPieChart.jsx (Asset-type breakdown, Recharts)
+│   │   │   ├── PerformanceChart.jsx (Recharts AreaChart, single series)
+│   │   │   ├── TimeRangeFilter.jsx (1W/1M/3M/YTD/1Y/All buttons)
+│   │   │   └── HoldingsPreview.jsx (Top 5 holdings table preview)
+│   │   ├── holdings/ (🔜 Planned)
+│   │   │   ├── HoldingsTable.jsx (full table with sort/filter)
+│   │   │   └── HoldingRow.jsx
+│   │   ├── analytics/ (🔜 Planned)
+│   │   │   ├── PerformanceChartFull.jsx
+│   │   │   └── MetricsBreakdown.jsx (per-asset-type table)
+│   │   ├── transactions/ (🔜 Planned)
+│   │   │   ├── TransactionModal.jsx (Buy/Sell modal shell)
+│   │   │   ├── BuyForm.jsx
+│   │   │   └── SellForm.jsx
+│   │   └── common/ (🔜 Planned)
+│   │       ├── Modal.jsx (generic modal primitive)
+│   │       ├── StatTile.jsx (value + delta per dataviz spec)
+│   │       ├── ChartCard.jsx (figure wrapper with title, table-view toggle)
+│   │       ├── Legend.jsx (categorical legend, toggle-to-isolate)
+│   │       ├── Tooltip.jsx (shared tooltip: value bold, label secondary)
+│   │       └── LoadingSpinner.jsx
+│   ├── hooks/ (🔜 Planned)
+│   │   └── usePortfolio.js (fetch + cache portfolio/performance, buy/sell mutators)
+│   ├── context/ (🔜 Planned)
+│   │   └── PortfolioContext.jsx (provides usePortfolio() app-wide)
+│   └── pages/ (✅ Stubs created)
+│       ├── DashboardPage.jsx (composes dashboard components)
+│       ├── HoldingsPage.jsx (composes HoldingsTable)
+│       └── AnalyticsPage.jsx (composes PerformanceChartFull + MetricsBreakdown)
+└── tests/ (placeholder)
+```
+
+### Original Planned Structure (Reference)
 ```
 src/
 ├── components/
@@ -132,6 +222,8 @@ src/
 ├── App.jsx
 └── index.js
 ```
+
+**Note:** Current structure aligns with original plan. Uses Vite instead of Create React App (faster, more modern), and `fetch` instead of `axios` (fewer dependencies, same functionality).
 
 ---
 
@@ -212,42 +304,72 @@ PortfolioManager/
 
 ### Phase 3: Price Integration (Days 3-4)
 1. Integrate yfinance library for price fetching
-2. Implement `GET /api/prices/{ticker}` endpoint
-3. Add caching to avoid excessive Yahoo Finance calls
-4. Implement `POST /api/prices/refresh` for batch updates
+2. Implement `GET /api/prices/tickers= {list of tickers} endpoint
+3. Implement `GET /api/prices/{ticker}/{date}` endpoint
+4. Add caching to avoid excessive Yahoo Finance calls
 5. **Deliverable:** API returns current prices for holdings
 
-### Phase 4: Frontend - Browse & Display (Days 4-5)
-1. Create React app structure with routing
-2. Implement `usePortfolio` hook for state management
-3. Build `PortfolioContainer` and `PortfolioList` components
-4. Implement `ItemTable` and `ItemRow` components
-5. Connect to backend API endpoints
-6. Add loading states and error handling
-7. **Deliverable:** Browse page shows portfolio items with prices
+### Phase 4: Frontend Setup & Layout (Days 4-5) — ✅ COMPLETED
+1. ✅ Create React app with Vite (modern tooling, faster build/dev)
+2. ✅ Install and configure React Router, Recharts, Tailwind CSS
+3. ✅ Set up theme colors from dataviz palette (8-hue categorical, sequential blue, status colors)
+4. ✅ Create service layer with mock data and switchable real/mock implementations
+5. ✅ Build `AppLayout` with `Header` (logo, cash/total quick stats, Buy/Sell buttons) and `NavMenu`
+6. ✅ Set up routing: Dashboard, Holdings, Analytics pages
+7. ✅ Dev server running on port 3000 with HMR
+8. ✅ **Deliverable:** Functional layout with navigation; ready for dashboard content
 
-### Phase 5: Frontend - Add/Remove UI (Day 5)
-1. Build `ItemForm` modal component
-2. Implement form validation matching backend
-3. Connect to add-asset/remove-asset endpoints
-4. Add success/error toast notifications
-5. Refresh list after operations
-6. **Deliverable:** Full CRUD UI functional
+### Phase 5: Frontend Dashboard & Charts (Days 5-6) — 🔜 NEXT
+1. Create `usePortfolio` hook for portfolio state management (fetch items, performance, buy/sell)
+2. Implement `PortfolioContext` to share state across pages
+3. Build dashboard components:
+   - `SummaryStats`: KPI row with Total Value, Total Return ($ + %), Cash Balance (StatTile spec)
+   - `AllocationPieChart`: Asset-type breakdown with categorical palette, legend, direct labels, tooltip, table-view toggle
+   - `PerformanceChart`: Single-series area chart (portfolio value over time) with TimeRangeFilter (1W/1M/3M/YTD/1Y/All), crosshair+tooltip
+   - `HoldingsPreview`: Top 5 holdings table with "View all" link to Holdings page
+4. Wire chart interactions: time-range filter re-fetches/re-slices performance data
+5. Validate pie and performance charts against dataviz palette (6-check validator)
+6. **Deliverable:** Dashboard page fully functional with mock data
 
-### Phase 6: Performance Visualization (Days 6-7)
-1. Calculate portfolio metrics (total value, gain/loss)
-2. Build `PerformanceChart` with Recharts library
-3. Implement `PerformanceMetrics` card display
-4. Add `GET /api/portfolio/performance` endpoint
-5. **Deliverable:** Performance page with charts and stats
+### Phase 6: Frontend Transaction UI & Holdings/Analytics Pages (Days 6-7)
+1. Build transaction UI:
+   - `Modal` primitive (overlay, focus trap, click-to-close, Esc key)
+   - `BuyForm`: ticker, assetType, quantity, price, useCash checkbox with validation
+   - `SellForm`: ticker select from holdings, quantity, price with max-held validation
+   - Wire to Header buy/sell buttons with state management
+2. Build Holdings page:
+   - Full `HoldingsTable` with columns (ticker, assetType, qty, costBasis, price, marketValue, gainLoss $/%)
+   - Client-side sort by column, text filter by ticker
+   - Reuse `usePortfolio()` context (no refetch)
+3. Build Analytics page:
+   - Larger `PerformanceChartFull` (full-width, taller) with same time-range filter
+   - `MetricsBreakdown`: per-asset-type table (costBasis vs. marketValue vs. return %)
+4. **Deliverable:** Full CRUD UI + secondary pages functional with mock data
 
-### Phase 7: Polish & Deployment (Days 7-8)
+### Phase 7: Backend Endpoints Implementation (Days 7-8)
+1. Implement `POST /api/portfolio/add-asset` (buy) with full transaction logic and Firestore atomicity
+2. Implement `POST /api/portfolio/remove-asset` (sell) with validation and cash handling
+3. Implement `GET /api/portfolio/performance` endpoint returning performance series by time range
+4. Add input validation and error handling across all endpoints
+5. Test endpoints with curl/Postman before frontend integration
+6. **Deliverable:** All core API endpoints fully implemented
+
+### Phase 8: Frontend-Backend Integration & Testing (Days 8-9)
+1. Switch `services/index.js` from mock to real API (toggle `VITE_USE_MOCKS=false`)
+2. Test buy/sell flows end-to-end (transaction creation, portfolio update, UI refresh)
+3. Test time-range filtering on performance endpoint
+4. Add loading states and error handling in UI
+5. Test data consistency across pages and after refresh
+6. **Deliverable:** Full app functional with real backend
+
+### Phase 9: Polish, Testing & Deployment (Days 9-10)
 1. Code cleanup and refactoring
 2. Comprehensive testing (unit + integration)
-3. Documentation (API docs, setup guide)
-4. Deploy backend (Cloud Run, Heroku, or similar)
-5. Deploy frontend (Vercel, Netlify, or similar)
-6. **Deliverable:** Live application
+3. Documentation (API docs, setup guide, frontend component docs)
+4. Deploy backend (Cloud Run, Railway, or Render)
+5. Deploy frontend (Vercel, Netlify)
+6. Monitor for errors; iterate based on real-world usage
+7. **Deliverable:** Live application
 
 ---
 
@@ -289,6 +411,7 @@ PortfolioManager/
 3. Frontend runs on `http://localhost:3000` (React default)
 4. SQL Connect emulator can be used for offline testing
 5. Use `docker-compose.yml` to spin up full stack locally
+6. API docs (Swagger UI) are available at `http://localhost:5000/apidocs/swagger` while the backend is running (Redoc alternative at `/apidocs/redoc`, raw OpenAPI spec at `/apidocs/openapi.json`) — adjust the port if `API_PORT` is overridden
 
 ### Deployment Strategy (MVP)
 - **Backend:** Deploy to Cloud Run (Google Cloud) or Railway/Render for free tier
@@ -348,6 +471,15 @@ REACT_APP_FIREBASE_CONFIG={...}
 - `/backend/app.py` - Main Flask/FastAPI application entry point
 - `/backend/services/db_service.py` - Database CRUD operations layer
 - `/backend/services/price_service.py` - Yahoo Finance integration
-- `/frontend/src/hooks/usePortfolio.js` - Portfolio state management hook
-- `/frontend/src/components/Portfolio/PortfolioContainer.jsx` - Main portfolio UI container
 - `/backend/routes/portfolio.py` - Core API endpoint definitions
+- `/backend/routes/prices.py` - Price endpoints (implemented)
+- `/backend/models/portfolio_item.py` - PortfolioItem Pydantic model
+- `/backend/models/transaction.py` - Transaction Pydantic model
+
+**Frontend:**
+- `/frontend/src/hooks/usePortfolio.js` - Portfolio state management hook (next)
+- `/frontend/src/context/PortfolioContext.jsx` - Global state provider (next)
+- `/frontend/src/components/dashboard/AllocationPieChart.jsx` - Pie chart (next)
+- `/frontend/src/components/dashboard/PerformanceChart.jsx` - Area chart (next)
+- `/frontend/src/components/transactions/TransactionModal.jsx` - Buy/Sell modal (next)
+- `/frontend/src/services/index.js` - Switchable service layer (done, ready for toggle)
