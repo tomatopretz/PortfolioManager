@@ -31,10 +31,10 @@ Transaction {
 ```
 **Note:** ticker and assetType are NOT stored; retrieved from related PortfolioItem
 
-### Database Collection Structure (Firestore)
-- Collection: `portfolio` (single document for current holdings)
-  - Subcollection: `items` (current portfolio items)
-- Collection: `transactions` (immutable transaction history)
+### Database Structure (Firebase SQL Connect / PostgreSQL)
+- Table: `portfolio_item` (current portfolio items)
+- Table: `transaction` (immutable transaction history)
+- Relationship: `transaction.portfolio_item_id` references `portfolio_item.id`
 
 ---
 
@@ -59,7 +59,7 @@ Transaction {
 
 ## 2A. BUSINESS LOGIC FOR BUY and SELL - POST /api/portfolio/add-asset and /remove-asset
 
-**Note:** All steps within ADD and REMOVE flows must be atomic—wrap in Firestore transactions so if any step fails, all changes rollback. There is no transaction-reversal endpoint; transactions are immutable once recorded.
+**Note:** All steps within ADD and REMOVE flows must be atomic—wrap in a database transaction so if any step fails, all changes rollback. There is no transaction-reversal endpoint; transactions are immutable once recorded.
 
 ### ADD (Buy Stock or Add Existing Holdings)
 **Preconditions:**
@@ -142,10 +142,10 @@ src/
 backend/
 ├── app.py (Flask/FastAPI main)
 ├── requirements.txt
-├── .env (Firebase credentials, API keys)
+├── .env (local backend configuration, API keys)
 ├── .gitignore
 ├── config.py (configuration)
-├── firebase_config.py (Firestore setup)
+├── db.py (PostgreSQL/SQL Connect setup)
 ├── models/
 │   ├── portfolio.py
 │   └── item.py
@@ -153,7 +153,7 @@ backend/
 │   ├── portfolio.py
 │   └── prices.py
 ├── services/
-│   ├── firestore_service.py
+│   ├── db_service.py
 │   ├── price_service.py (Yahoo Finance)
 │   └── portfolio_service.py (business logic)
 ├── utils/
@@ -193,11 +193,11 @@ PortfolioManager/
 
 ## 5. PRIORITIZED IMPLEMENTATION ROADMAP
 
-### Phase 1: Backend Models & Firestore Setup (Days 1-2)
+### Phase 1: Backend Models & SQL Connect Setup (Days 1-2)
 1. Initialize Python project with Flask
 2.  Define `PortfolioItem` and `Transaction` Pydantic models
-3. Set up Firebase/Firestore connection
-4. Create Firestore service layer with CRUD operations
+3. Set up Firebase SQL Connect/PostgreSQL connection
+4. Create database service layer with CRUD operations
 5. Implement endpoints: `GET /api/portfolio`, `GET /api/portfolio/items`
 6. Add basic error handling and logging
 7. **Deliverable:** Working API that retrieves empty portfolio
@@ -256,7 +256,7 @@ PortfolioManager/
 ### Backend Dependencies (Python)
 - Flask (HTTP framework)
 - Flask-CORS (CORS middleware)
-- firebase-admin (Firestore SDK)
+- psycopg (PostgreSQL driver)
 - yfinance (Yahoo Finance data)
 - python-dotenv (environment management)
 - pydantic (data validation)
@@ -275,8 +275,8 @@ PortfolioManager/
 ### Local Development Requirements
 - Python 3.9+
 - Node.js 16+
-- Firebase project with Firestore database
-- Google Cloud credentials JSON file
+- Firebase project with SQL Connect service
+- Firebase CLI for SQL Connect local emulator and deployment
 - Yahoo Finance API access (free, no key needed)
 
 ---
@@ -287,20 +287,20 @@ PortfolioManager/
 1. Create separate `.env.local` files for backend and frontend
 2. Backend runs on `http://localhost:5000` (Flask default)
 3. Frontend runs on `http://localhost:3000` (React default)
-4. Firestore emulator can be used for offline testing
+4. SQL Connect emulator can be used for offline testing
 5. Use `docker-compose.yml` to spin up full stack locally
 
 ### Deployment Strategy (MVP)
 - **Backend:** Deploy to Cloud Run (Google Cloud) or Railway/Render for free tier
 - **Frontend:** Deploy to Vercel or Netlify (automatic from git)
-- **Database:** Use Firebase hosted Firestore (free tier available)
+- **Database:** Use Firebase SQL Connect backed by Cloud SQL PostgreSQL
 - **CI/CD:** GitHub Actions for automated tests and deploys
 
 ### Environment Configuration
 
 **Backend (.env)**
 ```
-FIREBASE_CREDENTIALS_JSON=<path or inline>
+DATABASE_URL=<local or deployed PostgreSQL connection string>
 FLASK_ENV=development|production
 API_PORT=5000
 CORS_ORIGIN=http://localhost:3000
@@ -326,12 +326,12 @@ REACT_APP_FIREBASE_CONFIG={...}
 - User-friendly error messages in UI
 
 ### Performance Optimization
-- Cache prices in Firestore with timestamps
+- Cache prices in PostgreSQL with timestamps
 - Batch price updates rather than individual requests
 - Paginate portfolio if it grows large
 
 ### Testing Strategy
-- Unit tests for services (Firestore, price fetching)
+- Unit tests for services (database, price fetching)
 - Integration tests for API endpoints
 - E2E tests for critical user flows (add/remove/view)
 
@@ -346,7 +346,7 @@ REACT_APP_FIREBASE_CONFIG={...}
 ## Critical Files for Implementation
 
 - `/backend/app.py` - Main Flask/FastAPI application entry point
-- `/backend/services/firestore_service.py` - Firestore CRUD operations layer
+- `/backend/services/db_service.py` - Database CRUD operations layer
 - `/backend/services/price_service.py` - Yahoo Finance integration
 - `/frontend/src/hooks/usePortfolio.js` - Portfolio state management hook
 - `/frontend/src/components/Portfolio/PortfolioContainer.jsx` - Main portfolio UI container
