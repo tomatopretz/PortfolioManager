@@ -1,6 +1,7 @@
 Flask==2.3.2
 Werkzeug==2.3.7
 Flask-CORS==4.0.0
+flask-pydantic-spec==0.8.7
 python-dotenv==1.0.0
 firebase-admin==6.2.0
 pydantic>=2.5.0

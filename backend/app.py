@@ -4,8 +4,10 @@ import os
 from dotenv import load_dotenv
 from flask import Flask
 from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
 
 from config import Config
+from openapi import api
 from routes.portfolio import portfolio_bp
 from routes.prices import prices_bp
 
@@ -23,6 +25,7 @@ CORS(app, origins=os.getenv('CORS_ORIGIN', 'http://localhost:3000'))
 
 app.register_blueprint(portfolio_bp)
 app.register_blueprint(prices_bp)
+api.register(app)  # UI served at /apidocs/swagger
 
 
 @app.route('/health', methods=['GET'])

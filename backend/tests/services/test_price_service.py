@@ -8,7 +8,12 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from services.price_service import get_current_prices, get_price_on_date, parse_tickers, PriceNotFoundError
+from services.price_service import (
+    get_current_prices,
+    get_price_on_date,
+    parse_tickers,
+    PriceNotFoundError,
+)
 
 
 def _history_df(closes):
@@ -40,6 +45,20 @@ def test_get_price_on_date_raises_when_no_data(mock_ticker):
         get_price_on_date('GOOG', datetime(2026, 7, 20))
 
 
+@patch('services.price_service.yf.Ticker')
+def test_get_price_on_date_rounds_to_two_decimal_places(mock_ticker):
+    mock_ticker.return_value.history.return_value = _history_df([340.0799865722656])
+    assert get_price_on_date('AAPL', datetime(2026, 7, 20)) == 340.08
+
+
+@pytest.mark.parametrize('bad_close', [float('nan'), float('inf'), float('-inf'), 0, -105.5])
+@patch('services.price_service.yf.Ticker')
+def test_get_price_on_date_raises_for_implausible_price(mock_ticker, bad_close):
+    mock_ticker.return_value.history.return_value = _history_df([bad_close])
+    with pytest.raises(PriceNotFoundError):
+        get_price_on_date('AAPL', datetime(2026, 7, 20))
+
+
 @patch('services.price_service.yf.download')
 def test_get_current_prices_works_for_a_single_ticker(mock_download):
     columns = pd.MultiIndex.from_tuples([('AAPL', 'Close')])
@@ -59,3 +78,18 @@ def test_get_current_prices_skips_tickers_with_no_data(mock_download):
     columns = pd.MultiIndex.from_tuples([('AAPL', 'Close')])
     mock_download.return_value = pd.DataFrame([[105.5]], columns=columns)
     assert get_current_prices(['AAPL', 'BADTICKER']) == {'AAPL': 105.5}
+
+
+@patch('services.price_service.yf.download')
+def test_get_current_prices_rounds_to_two_decimal_places(mock_download):
+    columns = pd.MultiIndex.from_tuples([('AAPL', 'Close')])
+    mock_download.return_value = pd.DataFrame([[340.0799865722656]], columns=columns)
+    assert get_current_prices(['AAPL']) == {'AAPL': 340.08}
+
+
+@pytest.mark.parametrize('bad_close', [float('nan'), float('inf'), float('-inf'), 0, -105.5])
+@patch('services.price_service.yf.download')
+def test_get_current_prices_skips_implausible_prices(mock_download, bad_close):
+    columns = pd.MultiIndex.from_tuples([('AAPL', 'Close')])
+    mock_download.return_value = pd.DataFrame([[bad_close]], columns=columns)
+    assert get_current_prices(['AAPL']) == {}
