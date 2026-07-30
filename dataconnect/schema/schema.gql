@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 type PortfolioItem @table @unique(fields: ["ticker", "assetType"]) {
   ticker: String!
   assetType: String!
@@ -14,3 +15,22 @@ type Transaction @table {
   date: Timestamp!
   useCash: Boolean!
 }
+=======
+type PortfolioItem @table @unique(fields: ["ticker", "assetType"]) {
+  ticker: String!
+  assetType: String!
+  quantity: Float!
+  costBasis: Float!
+  isFavourite: Boolean! @default(value: false)
+  lastUpdated: Timestamp!
+}
+
+type Transaction @table {
+  portfolioItem: PortfolioItem!
+  type: String!
+  quantity: Float!
+  price: Float!
+  date: Timestamp!
+  useCash: Boolean!
+}
+>>>>>>> main
