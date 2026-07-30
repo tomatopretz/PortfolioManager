@@ -3,6 +3,7 @@ type PortfolioItem @table @unique(fields: ["ticker", "assetType"]) {
   assetType: String!
   quantity: Float!
   costBasis: Float!
+  isFavourite: Boolean! @default(value: false)
   lastUpdated: Timestamp!
 }
 
