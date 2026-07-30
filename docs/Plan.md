@@ -10,6 +10,7 @@ PortfolioItem {
   assetType: string ('stock', 'bond', 'cash', etc)
   quantity: number (current quantity held)
   costBasis: number (total cost of current holdings)
+  isFavourite: boolean
   lastUpdated: timestamp
 }
 ```

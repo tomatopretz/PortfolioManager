@@ -10,4 +10,5 @@ class PortfolioItemDTO(BaseModel):
     assetType: str  # 'stock', 'bond', etc
     quantity: float
     costBasis: float  # total cost of shares held
+    isFavourite: bool = False
     lastUpdated: Optional[datetime] = None

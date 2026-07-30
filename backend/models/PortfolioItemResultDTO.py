@@ -10,6 +10,7 @@ class PortfolioItemResultDTO(BaseModel):
     assetType: str
     quantity: float
     costBasis: float
+    isFavourite: bool = False
     lastUpdated: Optional[str] = None
     currentPrice: Optional[float] = None  # None if the ticker couldn't be priced
     marketValue: Optional[float] = None
