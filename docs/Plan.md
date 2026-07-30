@@ -31,10 +31,10 @@ Transaction {
 ```
 **Note:** ticker and assetType are NOT stored; retrieved from related PortfolioItem
 
-### Database Collection Structure (Firestore)
-- Collection: `portfolio` (single document for current holdings)
-  - Subcollection: `items` (current portfolio items)
-- Collection: `transactions` (immutable transaction history)
+### Database Structure (Firebase SQL Connect / PostgreSQL)
+- Table: `portfolio_item` (current portfolio items)
+- Table: `transaction` (immutable transaction history)
+- Relationship: `transaction.portfolio_item_id` references `portfolio_item.id`
 
 ---
 
@@ -58,7 +58,7 @@ Transaction {
 
 ## 2A. BUSINESS LOGIC FOR BUY/SELL and ADD/REMOVE CASH - POST /api/portfolio
 
-**Note:** Buy and sell (including cash deposit/withdrawal) are **one endpoint**: `POST /api/portfolio`. The `type` field (`"buy"` | `"sell"`) in the request body picks the flow — there's no separate add-asset/remove-asset URI. Add Cash and Remove Cash are not separate endpoints either — they reuse this same endpoint with `ticker: "CASH"` / `assetType: "cash"`. The request body is a subset of the stock/bond fields: cash operations only need `quantity` — `price` and `useCash` are not applicable (cash isn't bought "with" cash, and has no per-unit price). All steps within the buy and sell flows must be atomic—wrap in Firestore transactions so if any step fails, all changes rollback. There is no transaction-reversal endpoint; transactions are immutable once recorded.
+**Note:** All steps within ADD and REMOVE flows must be atomic—wrap in a database transaction so if any step fails, all changes rollback. There is no transaction-reversal endpoint; transactions are immutable once recorded.
 
 ### Request Parameters — POST /api/portfolio
 
@@ -234,10 +234,10 @@ src/
 backend/
 ├── app.py (Flask/FastAPI main)
 ├── requirements.txt
-├── .env (Firebase credentials, API keys)
+├── .env (local backend configuration, API keys)
 ├── .gitignore
 ├── config.py (configuration)
-├── firebase_config.py (Firestore setup)
+├── db.py (PostgreSQL/SQL Connect setup)
 ├── models/
 │   ├── portfolio.py
 │   └── item.py
@@ -245,7 +245,7 @@ backend/
 │   ├── portfolio.py
 │   └── prices.py
 ├── services/
-│   ├── firestore_service.py
+│   ├── db_service.py
 │   ├── price_service.py (Yahoo Finance)
 │   └── portfolio_service.py (business logic)
 ├── utils/
@@ -285,11 +285,11 @@ PortfolioManager/
 
 ## 5. PRIORITIZED IMPLEMENTATION ROADMAP
 
-### Phase 1: Backend Models & Firestore Setup (Days 1-2)
+### Phase 1: Backend Models & SQL Connect Setup (Days 1-2)
 1. Initialize Python project with Flask
-2. Define `PortfolioItem` and `Transaction` Pydantic models
-3. Set up Firebase/Firestore connection
-4. Create Firestore service layer with CRUD operations
+2.  Define `PortfolioItem` and `Transaction` Pydantic models
+3. Set up Firebase SQL Connect/PostgreSQL connection
+4. Create database service layer with CRUD operations
 5. Implement endpoints: `GET /api/portfolio`, `GET /api/portfolio/items`
 6. Add basic error handling and logging
 7. **Deliverable:** Working API that retrieves empty portfolio
@@ -378,7 +378,7 @@ PortfolioManager/
 ### Backend Dependencies (Python)
 - Flask (HTTP framework)
 - Flask-CORS (CORS middleware)
-- firebase-admin (Firestore SDK)
+- psycopg (PostgreSQL driver)
 - yfinance (Yahoo Finance data)
 - python-dotenv (environment management)
 - pydantic (data validation)
@@ -397,8 +397,8 @@ PortfolioManager/
 ### Local Development Requirements
 - Python 3.9+
 - Node.js 16+
-- Firebase project with Firestore database
-- Google Cloud credentials JSON file
+- Firebase project with SQL Connect service
+- Firebase CLI for SQL Connect local emulator and deployment
 - Yahoo Finance API access (free, no key needed)
 
 ---
@@ -409,21 +409,21 @@ PortfolioManager/
 1. Create separate `.env.local` files for backend and frontend
 2. Backend runs on `http://localhost:5000` (Flask default)
 3. Frontend runs on `http://localhost:3000` (React default)
-4. Firestore emulator can be used for offline testing
+4. SQL Connect emulator can be used for offline testing
 5. Use `docker-compose.yml` to spin up full stack locally
 6. API docs (Swagger UI) are available at `http://localhost:5000/apidocs/swagger` while the backend is running (Redoc alternative at `/apidocs/redoc`, raw OpenAPI spec at `/apidocs/openapi.json`) — adjust the port if `API_PORT` is overridden
 
 ### Deployment Strategy (MVP)
 - **Backend:** Deploy to Cloud Run (Google Cloud) or Railway/Render for free tier
 - **Frontend:** Deploy to Vercel or Netlify (automatic from git)
-- **Database:** Use Firebase hosted Firestore (free tier available)
+- **Database:** Use Firebase SQL Connect backed by Cloud SQL PostgreSQL
 - **CI/CD:** GitHub Actions for automated tests and deploys
 
 ### Environment Configuration
 
 **Backend (.env)**
 ```
-FIREBASE_CREDENTIALS_JSON=<path or inline>
+DATABASE_URL=<local or deployed PostgreSQL connection string>
 FLASK_ENV=development|production
 API_PORT=5000
 CORS_ORIGIN=http://localhost:3000
@@ -449,12 +449,12 @@ REACT_APP_FIREBASE_CONFIG={...}
 - User-friendly error messages in UI
 
 ### Performance Optimization
-- Cache prices in Firestore with timestamps
+- Cache prices in PostgreSQL with timestamps
 - Batch price updates rather than individual requests
 - Paginate portfolio if it grows large
 
 ### Testing Strategy
-- Unit tests for services (Firestore, price fetching)
+- Unit tests for services (database, price fetching)
 - Integration tests for API endpoints
 - E2E tests for critical user flows (add/remove/view)
 
@@ -466,54 +466,10 @@ REACT_APP_FIREBASE_CONFIG={...}
 
 ---
 
-## 9. CURRENT STATUS & RECENT PROGRESS (2026-07-28)
+## Critical Files for Implementation
 
-### Backend
-- Phase 1-3 Status: Models and Firestore setup exist; price endpoints implemented
-- Core API endpoints: `GET /api/portfolio`, `GET /api/prices` available (transaction endpoints still stubbed)
-- **Next Priority**: Phase 7 — Implement `POST /api/portfolio/add-asset`, `POST /api/portfolio/remove-asset`, `GET /api/portfolio/performance` with full buy/sell logic and Firestore atomicity
-
-### Frontend
-- ✅ **Phase 4 Complete**: React + Vite project fully scaffolded
-  - React 18, Vite, React Router, Recharts, Tailwind CSS configured
-  - Service layer with mock data and switchable real/mock implementations (toggle `VITE_USE_MOCKS` env var)
-  - Layout components (Header, NavMenu, AppLayout) with routing
-  - Theme colors from dataviz palette applied to CSS custom properties (light mode; dark mode deferred)
-  - Dev server running on port 3000 with HMR
-  - Three page stubs (Dashboard, Holdings, Analytics) ready for content
-- **Phase 5 (Dashboard) Next**: Build usePortfolio hook, PortfolioContext, and dashboard components (SummaryStats, AllocationPieChart, PerformanceChart, TimeRangeFilter, HoldingsPreview)
-- **Phase 6 (Transactions & Secondary Pages) After Phase 5**: Build Modal, BuyForm, SellForm, and complete Holdings/Analytics pages
-
-### Next Immediate Tasks (Priority Order)
-1. **Frontend Dashboard** (2-3 hours):
-   - Create `usePortfolio` hook + `PortfolioContext`
-   - Build `SummaryStats`, `AllocationPieChart`, `PerformanceChart`, `TimeRangeFilter`, `HoldingsPreview`
-   - Integrate mock data; verify charts render correctly with dataviz palette
-   
-2. **Frontend Transaction & Secondary Pages** (2-3 hours):
-   - Build `Modal`, `BuyForm`, `SellForm` components
-   - Implement Holdings and Analytics pages
-   - Wire up header Buy/Sell buttons to modals
-   
-3. **Backend Buy/Sell & Performance** (Parallel, 2-3 hours):
-   - Implement `POST /api/portfolio/add-asset` with full transaction logic and Firestore atomicity
-   - Implement `POST /api/portfolio/remove-asset` with validation
-   - Implement `GET /api/portfolio/performance` with time-range filtering
-   
-4. **Integration & Testing** (1-2 hours):
-   - Switch frontend from mock to real API
-   - Test buy/sell, performance filtering, data consistency end-to-end
-   - Add loading/error states in UI
-
-5. **Deployment** (1-2 hours):
-   - Deploy backend (Cloud Run or Railway)
-   - Deploy frontend (Vercel)
-
-### Critical Files for Implementation
-
-**Backend:**
-- `/backend/app.py` - Main Flask application entry point
-- `/backend/services/firestore_service.py` - Firestore CRUD operations
+- `/backend/app.py` - Main Flask/FastAPI application entry point
+- `/backend/services/db_service.py` - Database CRUD operations layer
 - `/backend/services/price_service.py` - Yahoo Finance integration
 - `/backend/routes/portfolio.py` - Core API endpoint definitions
 - `/backend/routes/prices.py` - Price endpoints (implemented)

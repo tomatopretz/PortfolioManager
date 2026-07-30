@@ -4,29 +4,33 @@ Flask-based REST API for portfolio management.
 
 ## Setup
 
-1. Create a Python virtual environment:
 ```bash
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-2. Install dependencies:
-```bash
+source venv/bin/activate
+python -m pip install --upgrade pip
 pip install -r requirements.txt
-```
-
-3. Create a `.env` file based on `.env.example`:
-```bash
+brew install --cask google-cloud-sdk
+brew install cloud-sql-proxy
+gcloud auth login
+gcloud auth application-default login
 cp .env.example .env
 ```
 
-4. Configure environment variables in `.env`:
-   - `FLASK_ENV`: Set to `development` or `production`
-   - `API_PORT`: Port to run the API on (default: 5000)
-   - `CORS_ORIGIN`: Frontend URL for CORS (default: http://localhost:3000)
-   - `FIREBASE_CREDENTIALS_JSON`: Path to Firebase credentials JSON
+Set `DATABASE_URL` in `.env`:
 
-## Running the API
+```env
+DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:5433/portfoliomanager-bfaa2-database
+```
+
+Use the shared database username and password provided separately. Do not commit `.env`.
+
+Start the Cloud SQL proxy in a separate terminal:
+
+```bash
+cloud-sql-proxy pretap-bfaa2:asia-southeast1:portfoliomanager-bfaa2-instance --port 5433
+```
+
+Run the backend:
 
 ```bash
 python app.py
@@ -57,7 +61,7 @@ backend/
 
 ## Next Steps
 
-- Set up Firestore integration (Step 2)
+- Set up Firebase SQL Connect/PostgreSQL integration (Step 2)
 - Implement portfolio and item models (Step 3)
-- Create Firestore service layer (Step 4)
+- Create database service layer (Step 4)
 - Implement GET endpoints (Step 5)
