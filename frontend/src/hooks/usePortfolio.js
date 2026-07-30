@@ -36,7 +36,6 @@ export const usePortfolio = () => {
 
   useEffect(() => {
     fetchItems()
-    fetchPerformance(timeRange)
   }, [])
 
   useEffect(() => {
