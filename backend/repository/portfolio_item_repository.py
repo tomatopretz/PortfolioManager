@@ -7,7 +7,7 @@ from models.PortfolioItemDTO import PortfolioItemDTO
 TABLE = 'portfolio_item'
 _COLUMNS = (
     'id, ticker, asset_type AS "assetType", quantity, '
-    'cost_basis AS "costBasis", last_updated AS "lastUpdated"'
+    'cost_basis AS "costBasis", is_favourite AS "isFavourite", last_updated AS "lastUpdated"'
 )
 
 
@@ -46,9 +46,9 @@ class PortfolioItemRepository:
         now = datetime.now(timezone.utc)
         with get_connection() as conn, conn.cursor() as cur:
             cur.execute(
-                f'INSERT INTO {TABLE} (ticker, asset_type, quantity, cost_basis, last_updated) '
-                f'VALUES (%s, %s, %s, %s, %s) RETURNING id',
-                (item.ticker, item.assetType, item.quantity, item.costBasis, now),
+                f'INSERT INTO {TABLE} (ticker, asset_type, quantity, cost_basis, is_favourite, last_updated) '
+                f'VALUES (%s, %s, %s, %s, %s, %s) RETURNING id',
+                (item.ticker, item.assetType, item.quantity, item.costBasis, item.isFavourite, now),
             )
             item.id = str(cur.fetchone()['id'])
         item.lastUpdated = now
@@ -60,8 +60,8 @@ class PortfolioItemRepository:
         with get_connection() as conn, conn.cursor() as cur:
             cur.execute(
                 f'UPDATE {TABLE} SET ticker = %s, asset_type = %s, quantity = %s, '
-                f'cost_basis = %s, last_updated = %s WHERE id = %s',
-                (item.ticker, item.assetType, item.quantity, item.costBasis, now, item.id),
+                f'cost_basis = %s, is_favourite = %s, last_updated = %s WHERE id = %s',
+                (item.ticker, item.assetType, item.quantity, item.costBasis, item.isFavourite, now, item.id),
             )
         item.lastUpdated = now
         return item

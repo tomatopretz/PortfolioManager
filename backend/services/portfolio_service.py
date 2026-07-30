@@ -37,6 +37,7 @@ class PortfolioService:
                 assetType=item.assetType,
                 quantity=item.quantity,
                 costBasis=item.costBasis,
+                isFavourite=item.isFavourite,
                 lastUpdated=item.lastUpdated.isoformat() if item.lastUpdated else None,
                 currentPrice=current_price,
                 marketValue=market_value,
