@@ -16,6 +16,13 @@ export const getPerformance = async (range = 'all') => {
   let filtered = [...mockPerformanceData];
 
   switch (range) {
+    case '1d':
+      filtered = filtered.filter((d) => {
+        const date = new Date(d.date);
+        const daysAgo = Math.floor((today - date) / (1000 * 60 * 60 * 24));
+        return daysAgo <= 1;
+      });
+      break;
     case '1w':
       filtered = filtered.filter((d) => {
         const date = new Date(d.date);
@@ -30,17 +37,11 @@ export const getPerformance = async (range = 'all') => {
         return daysAgo <= 30;
       });
       break;
-    case '3m':
+    case '6m':
       filtered = filtered.filter((d) => {
         const date = new Date(d.date);
         const daysAgo = Math.floor((today - date) / (1000 * 60 * 60 * 24));
-        return daysAgo <= 90;
-      });
-      break;
-    case 'ytd':
-      filtered = filtered.filter((d) => {
-        const date = new Date(d.date);
-        return date.getFullYear() === today.getFullYear();
+        return daysAgo <= 180;
       });
       break;
     case '1y':

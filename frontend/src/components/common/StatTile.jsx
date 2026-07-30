@@ -1,5 +1,5 @@
 function StatTile({ label, value, delta, deltaPercent, format = 'currency' }) {
-  const deltaColor = delta >= 0 ? 'var(--status-good)' : 'var(--status-critical)'
+  const deltaColor = delta >= 0 ? 'text-green-600' : 'text-red-600'
 
   const formatValue = (val) => {
     if (format === 'currency') {
@@ -10,28 +10,22 @@ function StatTile({ label, value, delta, deltaPercent, format = 'currency' }) {
         maximumFractionDigits: 0,
       }).format(val)
     }
+    if (format === 'percent') {
+      return `${val.toFixed(2)}%`
+    }
     return val
   }
 
   return (
-    <div
-      className="rounded-lg border p-4"
-      style={{
-        backgroundColor: 'var(--surface-1)',
-        borderColor: 'var(--gridline)',
-      }}
-    >
-      <p style={{ color: 'var(--text-muted)' }} className="text-sm mb-2">
+    <div className="bg-white rounded-xl border border-gray-200 p-6 transition-all duration-200 hover:border-blue-400 hover:shadow-lg">
+      <p className="text-xs font-semibold uppercase tracking-wider text-gray-600 mb-3">
         {label}
       </p>
-      <p
-        className="text-3xl font-bold mb-1"
-        style={{ color: 'var(--text-primary)' }}
-      >
+      <p className="text-3xl font-bold text-gray-900 mb-2">
         {formatValue(value)}
       </p>
       {delta !== undefined && (
-        <p className="text-sm" style={{ color: deltaColor }}>
+        <p className={`text-sm font-semibold ${deltaColor}`}>
           {delta >= 0 ? '+' : ''}{formatValue(delta)}
           {deltaPercent !== undefined && ` (${deltaPercent >= 0 ? '+' : ''}${deltaPercent.toFixed(2)}%)`}
         </p>

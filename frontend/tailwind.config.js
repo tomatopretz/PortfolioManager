@@ -6,20 +6,29 @@ export default {
   ],
   theme: {
     extend: {
-      colors: {
-        primary: {
-          50: '#f0f7ff',
-          100: '#e0effb',
-          200: '#cde2fb',
-          300: '#b7d3f6',
-          400: '#9ec5f4',
-          500: '#86b6ef',
-          600: '#6da7ec',
-          700: '#5598e7',
-          800: '#3987e5',
-          900: '#2a78d6',
-        }
-      }
+      fontFamily: {
+        sora: ['Sora', 'system-ui', '-apple-system', 'sans-serif'],
+        inter: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+      },
+      boxShadow: {
+        'sm': '0 1px 2px rgba(0, 0, 0, 0.05)',
+        'md': '0 4px 6px rgba(0, 0, 0, 0.07)',
+        'lg': '0 10px 15px rgba(0, 0, 0, 0.1)',
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.5s ease-out forwards',
+        'fade-in-left': 'fadeInLeft 0.5s ease-out forwards',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        fadeInLeft: {
+          '0%': { opacity: '0', transform: 'translateX(-8px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
+        },
+      },
     },
   },
   plugins: [],

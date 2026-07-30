@@ -1,9 +1,12 @@
 import { usePortfolioContext } from '../context/PortfolioContext'
+import LoadingSpinner from '../components/common/LoadingSpinner'
+import EmptyState from '../components/common/EmptyState'
 import SummaryStats from '../components/dashboard/SummaryStats'
 import AllocationPieChart from '../components/dashboard/AllocationPieChart'
 import PerformanceChart from '../components/dashboard/PerformanceChart'
 import TimeRangeFilter from '../components/dashboard/TimeRangeFilter'
 import HoldingsPreview from '../components/dashboard/HoldingsPreview'
+import AssetBreakdown from '../components/dashboard/AssetBreakdown'
 
 function DashboardPage() {
   const {
@@ -21,46 +24,69 @@ function DashboardPage() {
   if (loading && items.length === 0) {
     return (
       <div className="flex items-center justify-center h-96">
-        <p style={{ color: 'var(--text-muted)' }}>Loading portfolio data...</p>
+        <LoadingSpinner />
       </div>
     )
   }
 
-  if (error) {
+  if (error && items.length === 0) {
     return (
-      <div className="rounded-lg border p-6 bg-red-50 border-red-200">
-        <p style={{ color: 'var(--status-critical)' }}>Error loading portfolio: {error}</p>
+      <div className="bg-white rounded-xl border border-red-300 p-6 shadow-sm">
+        <p className="text-red-700 font-semibold">
+          Error loading portfolio
+        </p>
+        <p className="text-gray-700 text-sm mt-1">
+          {error}
+        </p>
+      </div>
+    )
+  }
+
+  const nonCashItems = items.filter((item) => item.assetType !== 'cash')
+
+  if (nonCashItems.length === 0) {
+    return (
+      <div className="space-y-8">
+        <EmptyState
+          title="No Holdings Yet"
+          description="Start building your portfolio by adding your first stock or bond. Click the Add Asset button in the header to get started."
+          action={{ label: 'Add Asset', onClick: () => {} }}
+        />
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>
-        Dashboard
-      </h2>
+      {/* Row 1: Pie Chart & Performance Chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1">
+          <AllocationPieChart items={nonCashItems} />
+        </div>
+        <div className="lg:col-span-2">
+          {loading ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-8 flex items-center justify-center h-96 shadow-sm">
+              <LoadingSpinner />
+            </div>
+          ) : (
+            <PerformanceChart
+              data={performance}
+              timeRange={timeRange}
+              onTimeRangeChange={setTimeRange}
+            />
+          )}
+        </div>
+      </div>
 
+      {/* Row 2: Holdings Table */}
+      {nonCashItems.length > 0 && <HoldingsPreview items={nonCashItems} />}
+
+      {/* Row 3: Summary Stats (4 cards) */}
       <SummaryStats
         totalValue={getTotalValue()}
         totalReturn={getTotalReturn()}
         cashBalance={getCashBalance()}
       />
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <div className="space-y-4">
-            <TimeRangeFilter
-              timeRange={timeRange}
-              onTimeRangeChange={setTimeRange}
-            />
-            <PerformanceChart data={performance} timeRange={timeRange} />
-          </div>
-        </div>
-
-        <AllocationPieChart items={items} />
-      </div>
-
-      <HoldingsPreview items={items} />
     </div>
   )
 }
