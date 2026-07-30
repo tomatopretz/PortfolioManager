@@ -4,31 +4,20 @@ function HoldingsPreview({ items }) {
   const holdings = items
     .filter((item) => item.assetType !== 'cash')
     .sort((a, b) => b.marketValue - a.marketValue)
-    .slice(0, 5)
 
   if (holdings.length === 0) {
     return null
   }
 
   return (
-    <div
-      className="rounded-lg border p-6"
-      style={{
-        backgroundColor: 'var(--surface-1)',
-        borderColor: 'var(--gridline)',
-      }}
-    >
-      <div className="flex items-center justify-between mb-4">
-        <h3
-          className="text-lg font-semibold"
-          style={{ color: 'var(--text-primary)' }}
-        >
-          Top Holdings
+    <div className="bg-white rounded-xl border border-gray-200 p-8 shadow-sm">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-lg font-bold text-gray-900">
+          Asset Holdings
         </h3>
         <Link
           to="/holdings"
-          className="text-sm"
-          style={{ color: 'var(--series-1)', textDecoration: 'none' }}
+          className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
         >
           View all →
         </Link>
@@ -37,64 +26,54 @@ function HoldingsPreview({ items }) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr style={{ borderBottom: '1px solid var(--gridline)' }}>
-              <th
-                className="text-left py-2 px-2"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                Ticker
+            <tr className="border-b border-gray-200 bg-gray-50">
+              <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                Symbol
               </th>
-              <th
-                className="text-right py-2 px-2"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                Qty
+              <th className="text-right py-3 px-4 font-semibold text-gray-700">
+                Shares
               </th>
-              <th
-                className="text-right py-2 px-2"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                Price
+              <th className="text-right py-3 px-4 font-semibold text-gray-700">
+                Current Price
               </th>
-              <th
-                className="text-right py-2 px-2"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                Value
+              <th className="text-right py-3 px-4 font-semibold text-gray-700">
+                Cost Basis
               </th>
-              <th
-                className="text-right py-2 px-2"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                Gain/Loss
+              <th className="text-right py-3 px-4 font-semibold text-gray-700">
+                Market Value
+              </th>
+              <th className="text-right py-3 px-4 font-semibold text-gray-700">
+                P/L
               </th>
             </tr>
           </thead>
           <tbody>
             {holdings.map((item) => {
-              const gainLossColor =
-                item.gainLoss >= 0
-                  ? 'var(--status-good)'
-                  : 'var(--status-critical)'
+              const gainLossColor = item.gainLoss >= 0 ? 'text-green-600' : 'text-red-600'
+              const totalCostBasis = item.costBasis || (item.currentPrice * item.quantity) - item.gainLoss
+              const costBasisPerShare = totalCostBasis / item.quantity
 
               return (
                 <tr
                   key={item.id}
-                  style={{ borderBottom: '1px solid var(--gridline)' }}
+                  className="border-b border-gray-200 hover:bg-gray-50 transition-colors"
                 >
-                  <td className="py-2 px-2" style={{ color: 'var(--text-primary)' }}>
+                  <td className="py-4 px-4 font-semibold text-gray-900">
                     {item.ticker}
                   </td>
-                  <td className="text-right py-2 px-2" style={{ color: 'var(--text-secondary)' }}>
+                  <td className="text-right py-4 px-4 text-gray-700">
                     {item.quantity.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                   </td>
-                  <td className="text-right py-2 px-2" style={{ color: 'var(--text-secondary)' }}>
+                  <td className="text-right py-4 px-4 text-gray-700">
                     ${item.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
-                  <td className="text-right py-2 px-2" style={{ color: 'var(--text-primary)' }}>
-                    ${item.marketValue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  <td className="text-right py-4 px-4 text-gray-700">
+                    ${costBasisPerShare.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
-                  <td className="text-right py-2 px-2" style={{ color: gainLossColor }}>
+                  <td className="text-right py-4 px-4 font-semibold text-gray-900">
+                    ${item.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td className={`text-right py-4 px-4 font-semibold ${gainLossColor}`}>
                     ${item.gainLoss.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({item.gainLossPercent.toFixed(2)}%)
                   </td>
                 </tr>

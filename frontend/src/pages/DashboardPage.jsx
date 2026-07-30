@@ -6,6 +6,7 @@ import AllocationPieChart from '../components/dashboard/AllocationPieChart'
 import PerformanceChart from '../components/dashboard/PerformanceChart'
 import TimeRangeFilter from '../components/dashboard/TimeRangeFilter'
 import HoldingsPreview from '../components/dashboard/HoldingsPreview'
+import AssetBreakdown from '../components/dashboard/AssetBreakdown'
 
 function DashboardPage() {
   const {
@@ -30,17 +31,11 @@ function DashboardPage() {
 
   if (error && items.length === 0) {
     return (
-      <div
-        className="rounded-lg border p-6"
-        style={{
-          backgroundColor: 'var(--surface-1)',
-          borderColor: 'var(--status-critical)',
-        }}
-      >
-        <p style={{ color: 'var(--status-critical)' }} className="font-semibold">
+      <div className="bg-white rounded-xl border border-red-300 p-6 shadow-sm">
+        <p className="text-red-700 font-semibold">
           Error loading portfolio
         </p>
-        <p style={{ color: 'var(--text-secondary)' }} className="text-sm mt-1">
+        <p className="text-gray-700 text-sm mt-1">
           {error}
         </p>
       </div>
@@ -51,14 +46,11 @@ function DashboardPage() {
 
   if (nonCashItems.length === 0) {
     return (
-      <div className="space-y-6">
-        <h2 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>
-          Dashboard
-        </h2>
+      <div className="space-y-8">
         <EmptyState
           title="No Holdings Yet"
-          description="Start building your portfolio by adding your first stock or bond. Click the Buy button above to get started."
-          action={{ label: 'Buy Asset', onClick: () => {} }}
+          description="Start building your portfolio by adding your first stock or bond. Click the Add Asset button in the header to get started."
+          action={{ label: 'Add Asset', onClick: () => {} }}
         />
       </div>
     )
@@ -66,43 +58,35 @@ function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>
-        Dashboard
-      </h2>
+      {/* Row 1: Pie Chart & Performance Chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1">
+          <AllocationPieChart items={nonCashItems} />
+        </div>
+        <div className="lg:col-span-2">
+          {loading ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-8 flex items-center justify-center h-96 shadow-sm">
+              <LoadingSpinner />
+            </div>
+          ) : (
+            <PerformanceChart
+              data={performance}
+              timeRange={timeRange}
+              onTimeRangeChange={setTimeRange}
+            />
+          )}
+        </div>
+      </div>
 
+      {/* Row 2: Holdings Table */}
+      {nonCashItems.length > 0 && <HoldingsPreview items={nonCashItems} />}
+
+      {/* Row 3: Summary Stats (4 cards) */}
       <SummaryStats
         totalValue={getTotalValue()}
         totalReturn={getTotalReturn()}
         cashBalance={getCashBalance()}
       />
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <div className="space-y-4">
-            <TimeRangeFilter
-              timeRange={timeRange}
-              onTimeRangeChange={setTimeRange}
-            />
-            {loading ? (
-              <div
-                className="rounded-lg border p-12 flex items-center justify-center h-96"
-                style={{
-                  backgroundColor: 'var(--surface-1)',
-                  borderColor: 'var(--gridline)',
-                }}
-              >
-                <LoadingSpinner />
-              </div>
-            ) : (
-              <PerformanceChart data={performance} timeRange={timeRange} />
-            )}
-          </div>
-        </div>
-
-        <AllocationPieChart items={nonCashItems} />
-      </div>
-
-      {nonCashItems.length > 0 && <HoldingsPreview items={nonCashItems} />}
     </div>
   )
 }
