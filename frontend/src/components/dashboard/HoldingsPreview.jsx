@@ -50,8 +50,6 @@ function HoldingsPreview({ items }) {
           <tbody>
             {holdings.map((item) => {
               const gainLossColor = item.gainLoss >= 0 ? 'text-green-600' : 'text-red-600'
-              const totalCostBasis = item.costBasis || (item.currentPrice * item.quantity) - item.gainLoss
-              const costBasisPerShare = totalCostBasis / item.quantity
 
               return (
                 <tr
@@ -68,7 +66,7 @@ function HoldingsPreview({ items }) {
                     ${item.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="text-right py-4 px-4 text-gray-700">
-                    ${costBasisPerShare.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ${item.costBasis.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="text-right py-4 px-4 font-semibold text-gray-900">
                     ${item.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

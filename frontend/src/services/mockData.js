@@ -7,7 +7,7 @@ const mockHoldings = [
     ticker: 'AAPL',
     assetType: 'stock',
     quantity: 50,
-    costBasis: 7500,
+    costBasis: 130,
     lastUpdated: new Date('2026-07-28'),
     currentPrice: 185.32,
   },
@@ -16,7 +16,7 @@ const mockHoldings = [
     ticker: 'GOOG',
     assetType: 'stock',
     quantity: 30,
-    costBasis: 3900,
+    costBasis: 130,
     lastUpdated: new Date('2026-07-28'),
     currentPrice: 168.75,
   },
@@ -25,7 +25,7 @@ const mockHoldings = [
     ticker: 'TSLA',
     assetType: 'stock',
     quantity: 15,
-    costBasis: 4500,
+    costBasis: 300,
     lastUpdated: new Date('2026-07-28'),
     currentPrice: 242.50,
   },
@@ -34,7 +34,7 @@ const mockHoldings = [
     ticker: 'BND',
     assetType: 'bond',
     quantity: 100,
-    costBasis: 10000,
+    costBasis: 100,
     lastUpdated: new Date('2026-07-28'),
     currentPrice: 98.50,
   },
@@ -43,7 +43,7 @@ const mockHoldings = [
     ticker: 'CASH',
     assetType: 'cash',
     quantity: 12340,
-    costBasis: 12340,
+    costBasis: 1,
     lastUpdated: new Date('2026-07-28'),
     currentPrice: 1,
   },
@@ -53,8 +53,8 @@ const mockHoldings = [
 export const enrichHoldings = (holdings) => {
   return holdings.map((item) => {
     const marketValue = item.quantity * item.currentPrice;
-    const gainLoss = marketValue - item.costBasis;
-    const gainLossPercent = item.costBasis > 0 ? (gainLoss / item.costBasis) * 100 : 0;
+    const gainLoss = marketValue - item.costBasis * item.quantity;
+    const gainLossPercent = item.costBasis > 0 ? (gainLoss / item.costBasis * item.quantity) * 100 : 0;
 
     return {
       ...item,
