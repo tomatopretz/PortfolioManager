@@ -1,5 +1,5 @@
 function StatTile({ label, value, delta, deltaPercent, format = 'currency' }) {
-  const deltaColor = delta >= 0 ? 'text-green-600' : 'text-red-600'
+  const deltaColor = delta >= 0 ? 'text-[var(--status-good)]' : 'text-[var(--status-serious)]'
 
   const formatValue = (val) => {
     if (format === 'currency') {
@@ -17,11 +17,11 @@ function StatTile({ label, value, delta, deltaPercent, format = 'currency' }) {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 transition-all duration-200 hover:border-blue-400 hover:shadow-lg">
-      <p className="text-xs font-semibold uppercase tracking-wider text-gray-600 mb-3">
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-6 transition-all duration-200 hover:border-[var(--primary)] hover:shadow-[var(--shadow-md)]">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
         {label}
       </p>
-      <p className="text-3xl font-bold text-gray-900 mb-2">
+      <p className="mb-2 text-3xl font-bold text-[var(--text-primary)]">
         {formatValue(value)}
       </p>
       {delta !== undefined && (

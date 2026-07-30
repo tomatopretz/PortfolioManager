@@ -4,8 +4,8 @@ import TimeRangeFilter from './TimeRangeFilter'
 function PerformanceChart({ data, timeRange, onTimeRangeChange }) {
   if (!data || data.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-8 flex items-center justify-center h-96 shadow-sm">
-        <p className="font-semibold text-gray-600">
+      <div className="flex h-96 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-8 shadow-[var(--shadow-sm)]">
+        <p className="font-semibold text-[var(--text-secondary)]">
           No performance data available
         </p>
       </div>
@@ -19,11 +19,11 @@ function PerformanceChart({ data, timeRange, onTimeRangeChange }) {
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white rounded border border-gray-200 p-2 shadow-lg">
-          <p className="font-semibold text-gray-900 text-xs">
+        <div className="rounded border border-[var(--border)] bg-[var(--surface-1)] p-2 shadow-[var(--shadow-lg)]">
+          <p className="text-xs font-semibold text-[var(--text-primary)]">
             {payload[0].payload.date}
           </p>
-          <p className="text-blue-600 text-xs">
+          <p className="text-xs text-[var(--primary)]">
             ${payload[0].value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </div>
@@ -61,14 +61,14 @@ function PerformanceChart({ data, timeRange, onTimeRangeChange }) {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 h-full shadow-sm">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-bold text-gray-900">
+    <div className="h-full rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-[var(--shadow-sm)]">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-lg font-bold text-[var(--text-primary)]">
           Portfolio Performance
         </h3>
         <TimeRangeFilter
-          timeRange={timeRange}
-          onTimeRangeChange={onTimeRangeChange}
+          currentRange={timeRange}
+          onChange={onTimeRangeChange}
         />
       </div>
       <ResponsiveContainer width="100%" height={300}>
@@ -81,22 +81,22 @@ function PerformanceChart({ data, timeRange, onTimeRangeChange }) {
           </defs>
           <CartesianGrid
             strokeDasharray="3 3"
-            stroke="#e5e7eb"
+            stroke="var(--gridline)"
             vertical={false}
           />
           <XAxis
             dataKey="date"
             tickFormatter={getDateLabel}
-            tick={{ fontSize: 12, fill: '#999999' }}
-            stroke="#e5e7eb"
+            tick={{ fontSize: 12, fill: 'var(--text-secondary)' }}
+            stroke="var(--gridline)"
           />
           <YAxis
             domain={[Math.floor(minValue - range * 0.1), Math.ceil(maxValue + range * 0.1)]}
             tickFormatter={(value) =>
               `$${(value / 1000).toFixed(0)}k`
             }
-            tick={{ fontSize: 12, fill: '#999999' }}
-            stroke="#e5e7eb"
+            tick={{ fontSize: 12, fill: 'var(--text-secondary)' }}
+            stroke="var(--gridline)"
           />
           <Tooltip content={<CustomTooltip />} />
           <Area
