@@ -17,11 +17,11 @@ function StatTile({ label, value, delta, deltaPercent, format = 'currency' }) {
   }
 
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-6 transition-all duration-200 hover:border-[var(--primary)] hover:shadow-[var(--shadow-md)]">
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-5 transition-all duration-200 hover:border-[var(--primary)] hover:shadow-[var(--shadow-md)]">
       <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
         {label}
       </p>
-      <p className="mb-2 text-3xl font-bold text-[var(--text-primary)]">
+      <p className="mb-2 text-2xl font-bold text-[var(--text-primary)]">
         {formatValue(value)}
       </p>
       {delta !== undefined && (

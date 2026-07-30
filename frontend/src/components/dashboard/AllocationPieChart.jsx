@@ -62,8 +62,8 @@ function AllocationPieChart({ items }) {
   }
 
   return (
-    <div className="h-full rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-8 shadow-[var(--shadow-sm)]">
-      <div className="mb-6 flex items-center justify-between">
+    <div className="h-full rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-[var(--shadow-sm)]">
+      <div className="mb-4 flex items-center justify-between">
         <h3 className="text-lg font-bold text-[var(--text-primary)]">
           Asset Allocation
         </h3>
@@ -76,28 +76,39 @@ function AllocationPieChart({ items }) {
       </div>
 
       {!showTable ? (
-        <ResponsiveContainer width="100%" height={300}>
-          <PieChart>
-            <Pie
-              data={data}
-              cx="50%"
-              cy="50%"
-              labelLine={false}
-              label={({ name, value }) => {
-                const percent = total > 0 ? ((value / total) * 100).toFixed(0) : 0
-                return `${name} ${percent}%`
-              }}
-              outerRadius={80}
-              fill="#3b82f6"
-              dataKey="value"
-            >
-              {data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip content={<CustomTooltip />} />
-          </PieChart>
-        </ResponsiveContainer>
+        <>
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie
+                data={data}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={false}
+                outerRadius={78}
+                fill="#3b82f6"
+                dataKey="value"
+              >
+                {data.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip content={<CustomTooltip />} />
+            </PieChart>
+          </ResponsiveContainer>
+
+          <div className="mt-2 flex flex-wrap gap-3">
+            {data.map((entry, index) => (
+              <div key={entry.assetType} className="flex items-center gap-2 text-sm">
+                <span
+                  className="inline-block h-3 w-3 rounded-full"
+                  style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                />
+                <span className="text-[var(--text-secondary)]">{entry.name}</span>
+              </div>
+            ))}
+          </div>
+        </>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
