@@ -9,15 +9,15 @@ function TimeRangeFilter({ timeRange, onTimeRangeChange }) {
   ]
 
   return (
-    <div className="flex gap-2 p-1 rounded-lg w-fit bg-gray-100">
+    <div className="flex w-fit gap-2 rounded-lg bg-[var(--surface-2)] p-1">
       {ranges.map((range) => (
         <button
           key={range.key}
           onClick={() => onTimeRangeChange(range.key)}
-          className={`px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 ${
+          className={`rounded-md px-4 py-2 text-sm font-semibold transition-all duration-200 ${
             timeRange === range.key
-              ? 'text-white bg-blue-600 shadow-sm'
-              : 'text-gray-700 hover:text-gray-900 hover:bg-gray-200'
+              ? 'bg-[var(--primary)] text-white shadow-sm'
+              : 'text-[var(--text-secondary)] hover:bg-[var(--surface-3)] hover:text-[var(--text-primary)]'
           }`}
         >
           {range.label}

@@ -28,22 +28,22 @@ function AssetBreakdown({ items }) {
   if (data.length === 0) return null
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-8 shadow-sm">
-      <h3 className="text-lg font-bold text-gray-900 mb-6">
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-8 shadow-[var(--shadow-sm)]">
+      <h3 className="mb-6 text-lg font-bold text-[var(--text-primary)]">
         Asset Breakdown by Type
       </h3>
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left py-3 px-4 font-semibold text-gray-700">
+            <tr className="border-b border-[var(--border)] bg-[var(--surface-2)]">
+              <th className="px-4 py-3 text-left font-semibold text-[var(--text-secondary)]">
                 Asset Type
               </th>
-              <th className="text-right py-3 px-4 font-semibold text-gray-700">
+              <th className="px-4 py-3 text-right font-semibold text-[var(--text-secondary)]">
                 Value
               </th>
-              <th className="text-right py-3 px-4 font-semibold text-gray-700">
+              <th className="px-4 py-3 text-right font-semibold text-[var(--text-secondary)]">
                 % of Portfolio
               </th>
             </tr>
@@ -52,28 +52,28 @@ function AssetBreakdown({ items }) {
             {data.map((row, index) => (
               <tr
                 key={row.type}
-                className="border-b border-gray-200 hover:bg-gray-50 transition-colors"
+                className="border-b border-[var(--border)] transition-colors hover:bg-[var(--surface-2)]"
               >
-                <td className="py-4 px-4">
+                <td className="px-4 py-4">
                   <div className="flex items-center gap-3">
                     <div
-                      className="w-3 h-3 rounded-full"
+                      className="h-3 w-3 rounded-full"
                       style={{
                         backgroundColor: COLORS[index % COLORS.length],
                       }}
                     />
-                    <span className="text-gray-900 font-medium">
+                    <span className="font-medium text-[var(--text-primary)]">
                       {row.type}
                     </span>
                   </div>
                 </td>
-                <td className="text-right py-4 px-4 font-semibold text-gray-900">
+                <td className="px-4 py-4 text-right font-semibold text-[var(--text-primary)]">
                   ${row.value.toLocaleString('en-US', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
                 </td>
-                <td className="text-right py-4 px-4 text-gray-700">
+                <td className="px-4 py-4 text-right text-[var(--text-secondary)]">
                   {row.percent}%
                 </td>
               </tr>
