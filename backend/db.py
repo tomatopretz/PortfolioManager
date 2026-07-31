@@ -4,7 +4,7 @@ from typing import ContextManager, Iterator, Optional
 
 import psycopg
 from dotenv import load_dotenv
-from psycopg import Connection
+from psycopg import Connection, Cursor
 from psycopg.rows import dict_row
 
 load_dotenv()
@@ -45,3 +45,25 @@ def get_connection() -> ContextManager[Connection]:
 
 def get_transaction() -> ContextManager[Connection]:
     return db.transaction()
+
+
+@contextmanager
+def get_cursor(conn: Optional[Connection] = None) -> Iterator[Cursor]:
+    """Yield a cursor. If `conn` is given (e.g. from get_transaction()), reuses it so the
+    caller controls commit/rollback across multiple calls; otherwise opens its own
+    self-contained, auto-committing connection."""
+    if conn is not None:
+        # Caller (e.g. PortfolioService, inside a `with get_transaction() as conn:` block)
+        # already owns a connection spanning several repo calls. Just hand back a cursor on
+        # that same connection - don't commit/close here, the caller's `with` block does that
+        # once ALL steps succeed (or rolls everything back together if one of them raises).
+        with conn.cursor() as cur:
+            yield cur
+        return
+
+    # No shared connection was passed in - this is a single, self-contained call (the common
+    # case for most repo methods). Open our own connection just for this one operation; when
+    # the `with` block below exits, get_connection()'s own context manager commits (or rolls
+    # back on exception) and closes it automatically.
+    with get_connection() as owned_conn, owned_conn.cursor() as cur:
+        yield cur

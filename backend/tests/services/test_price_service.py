@@ -1,6 +1,6 @@
 import os
 import sys
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from unittest.mock import patch
 
 import pandas as pd
@@ -10,6 +10,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from services.price_service import (
     get_current_price,
+    get_daily_price_history,
+    get_intraday_price_history,
     list_current_prices,
     get_price_on_date,
     get_ticker_price,
@@ -20,6 +22,16 @@ from services.price_service import (
 
 def _history_df(closes):
     return pd.DataFrame({'Close': closes})
+
+
+def _download_df(closes_by_ticker):
+    columns = pd.MultiIndex.from_tuples((ticker, 'Close') for ticker in closes_by_ticker)
+    index = pd.to_datetime(['2026-07-30', '2026-07-31'])
+    rows = [
+        [closes[0] for closes in closes_by_ticker.values()],
+        [closes[1] for closes in closes_by_ticker.values()],
+    ]
+    return pd.DataFrame(rows, index=index, columns=columns)
 
 
 def test_parse_tickers_splits_strips_and_upper_cases():
@@ -95,6 +107,72 @@ def test_list_current_prices_skips_implausible_prices(mock_download, bad_close):
     columns = pd.MultiIndex.from_tuples([('AAPL', 'Close')])
     mock_download.return_value = pd.DataFrame([[bad_close]], columns=columns)
     assert list_current_prices(['AAPL']) == {}
+
+
+@patch('services.price_service.yf.download')
+def test_get_daily_price_history_returns_close_prices_by_date(mock_download):
+    mock_download.return_value = _download_df({'AAPL': [190.123, 191.0], 'MSFT': [500.0, 505.0]})
+
+    result = get_daily_price_history(['AAPL', 'MSFT'], date(2026, 7, 30), date(2026, 7, 31))
+
+    assert result == {
+        'AAPL': {date(2026, 7, 30): 190.12, date(2026, 7, 31): 191.0},
+        'MSFT': {date(2026, 7, 30): 500.0, date(2026, 7, 31): 505.0},
+    }
+    mock_download.assert_called_once_with(
+        ['AAPL', 'MSFT'],
+        start=date(2026, 7, 30),
+        end=date(2026, 8, 1),
+        interval='1d',
+        group_by='ticker',
+        auto_adjust=False,
+        progress=False,
+    )
+
+
+@patch('services.price_service.yf.download')
+def test_get_daily_price_history_handles_single_ticker_dataframe(mock_download):
+    index = pd.to_datetime(['2026-07-30', '2026-07-31'])
+    mock_download.return_value = pd.DataFrame({'Close': [190.0, 191.0]}, index=index)
+
+    result = get_daily_price_history(['AAPL'], date(2026, 7, 30), date(2026, 7, 31))
+
+    assert result == {'AAPL': {date(2026, 7, 30): 190.0, date(2026, 7, 31): 191.0}}
+
+
+@patch('services.price_service.yf.download')
+def test_get_intraday_price_history_returns_close_prices_by_timestamp(mock_download):
+    timestamps = pd.to_datetime(['2026-07-31 09:30:00', '2026-07-31 09:35:00'])
+    columns = pd.MultiIndex.from_tuples([('AAPL', 'Close')])
+    mock_download.return_value = pd.DataFrame([[190.0], [191.0]], index=timestamps, columns=columns)
+
+    result = get_intraday_price_history(['AAPL'])
+
+    assert result == {
+        'AAPL': {
+            datetime(2026, 7, 31, 9, 30): 190.0,
+            datetime(2026, 7, 31, 9, 35): 191.0,
+        }
+    }
+    mock_download.assert_called_once_with(
+        ['AAPL'],
+        period='1d',
+        interval='5m',
+        group_by='ticker',
+        auto_adjust=False,
+        progress=False,
+    )
+
+
+@patch('services.price_service.yf.download')
+def test_get_daily_price_history_skips_implausible_prices(mock_download):
+    columns = pd.MultiIndex.from_tuples([('AAPL', 'Close')])
+    index = pd.to_datetime(['2026-07-30', '2026-07-31'])
+    mock_download.return_value = pd.DataFrame([[float('nan')], [191.0]], index=index, columns=columns)
+
+    assert get_daily_price_history(['AAPL'], date(2026, 7, 30), date(2026, 7, 31)) == {
+        'AAPL': {date(2026, 7, 31): 191.0}
+    }
 
 
 @patch('services.price_service.yf.Ticker')

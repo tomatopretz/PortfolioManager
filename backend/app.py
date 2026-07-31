@@ -8,6 +8,7 @@ from werkzeug.exceptions import HTTPException
 
 from config import config
 from openapi import api
+from routes.performance import performance_bp
 from routes.portfolio import portfolio_bp
 from routes.prices import prices_bp
 from routes.transactions import transactions_bp
@@ -27,7 +28,14 @@ CORS(app, origins=os.getenv('CORS_ORIGIN', 'http://localhost:3000'))
 app.register_blueprint(portfolio_bp)
 app.register_blueprint(prices_bp)
 app.register_blueprint(transactions_bp)
+app.register_blueprint(performance_bp)
 api.register(app)  # UI served at /apidocs/swagger
+
+
+@app.after_request
+def add_no_cache_headers(response):
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 @app.route('/health', methods=['GET'])
