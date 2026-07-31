@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { usePortfolioContext } from '../context/PortfolioContext'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import EmptyState from '../components/common/EmptyState'
@@ -7,6 +8,7 @@ import PerformanceChart from '../components/dashboard/PerformanceChart'
 import TimeRangeFilter from '../components/dashboard/TimeRangeFilter'
 import HoldingsPreview from '../components/dashboard/HoldingsPreview'
 import AssetBreakdown from '../components/dashboard/AssetBreakdown'
+import AddAssetModal from '../components/portfolio/AddAssetModal'
 
 function DashboardPage() {
   const {
@@ -19,7 +21,10 @@ function DashboardPage() {
     getTotalValue,
     getCashBalance,
     getTotalReturn,
+    handleBuy,
   } = usePortfolioContext()
+
+  const [isAddAssetModalOpen, setIsAddAssetModalOpen] = useState(false)
 
   if (loading && items.length === 0) {
     return (
@@ -52,48 +57,64 @@ function DashboardPage() {
 
   if (nonCashItems.length === 0) {
     return (
-      <div className="space-y-8">
-        <EmptyState
-          title="No Holdings Yet"
-          description="Start building your portfolio by adding your first stock or bond. Click the Add Asset button in the header to get started."
-          action={{ label: 'Add Asset', onClick: () => {} }}
+      <>
+        <div className="space-y-8">
+          <EmptyState
+            title="No Holdings Yet"
+            description="Start building your portfolio by adding your first stock or bond. Click the Add Asset button in the header to get started."
+            action={{ label: 'Add Asset', onClick: () => setIsAddAssetModalOpen(true) }}
+          />
+        </div>
+
+        <AddAssetModal
+          isOpen={isAddAssetModalOpen}
+          onClose={() => setIsAddAssetModalOpen(false)}
+          onSubmit={handleBuy}
         />
-      </div>
+      </>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Row 1: Pie Chart & Performance Chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1">
-          <AllocationPieChart items={allocationItems} />
+    <>
+      <div className="space-y-6">
+        {/* Row 1: Pie Chart & Performance Chart */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1">
+            <AllocationPieChart items={allocationItems} />
+          </div>
+          <div className="lg:col-span-2">
+            {loading ? (
+              <div className="flex h-96 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-8 shadow-[var(--shadow-sm)]">
+                <LoadingSpinner />
+              </div>
+            ) : (
+              <PerformanceChart
+                data={performance}
+                timeRange={timeRange}
+                onTimeRangeChange={setTimeRange}
+              />
+            )}
+          </div>
         </div>
-        <div className="lg:col-span-2">
-          {loading ? (
-            <div className="flex h-96 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-8 shadow-[var(--shadow-sm)]">
-              <LoadingSpinner />
-            </div>
-          ) : (
-            <PerformanceChart
-              data={performance}
-              timeRange={timeRange}
-              onTimeRangeChange={setTimeRange}
-            />
-          )}
-        </div>
+
+        {/* Row 2: Holdings Table */}
+        {nonCashItems.length > 0 && <HoldingsPreview items={nonCashItems} />}
+
+        {/* Row 3: Summary Stats (4 cards) */}
+        <SummaryStats
+          totalValue={getTotalValue()}
+          totalReturn={getTotalReturn()}
+          cashBalance={getCashBalance()}
+        />
       </div>
 
-      {/* Row 2: Holdings Table */}
-      {nonCashItems.length > 0 && <HoldingsPreview items={nonCashItems} />}
-
-      {/* Row 3: Summary Stats (4 cards) */}
-      <SummaryStats
-        totalValue={getTotalValue()}
-        totalReturn={getTotalReturn()}
-        cashBalance={getCashBalance()}
+      <AddAssetModal
+        isOpen={isAddAssetModalOpen}
+        onClose={() => setIsAddAssetModalOpen(false)}
+        onSubmit={handleBuy}
       />
-    </div>
+    </>
   )
 }
 
