@@ -1,6 +1,6 @@
 import logging
 import math
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import yfinance as yf
 
@@ -37,6 +37,80 @@ def list_current_prices(tickers: list[str]) -> dict[str, float]:
             logger.warning('Skipping ticker=%s: %s', ticker, e)
             continue
     return prices
+
+
+def get_daily_price_history(tickers: list[str], start: date, end: date) -> dict[str, dict[date, float]]:
+    """Get daily close prices for tickers between start and end, inclusive."""
+    if not tickers:
+        return {}
+
+    data = yf.download(
+        tickers,
+        start=start,
+        end=end + timedelta(days=1),
+        interval='1d',
+        group_by='ticker',
+        auto_adjust=False,
+        progress=False,
+    )
+    return _extract_close_history(data, tickers, key_type='date')
+
+
+def get_intraday_price_history(
+    tickers: list[str],
+    period: str = '1d',
+    interval: str = '5m',
+) -> dict[str, dict[datetime, float]]:
+    """Get intraday close prices for tickers."""
+    if not tickers:
+        return {}
+
+    data = yf.download(
+        tickers,
+        period=period,
+        interval=interval,
+        group_by='ticker',
+        auto_adjust=False,
+        progress=False,
+    )
+    return _extract_close_history(data, tickers, key_type='datetime')
+
+
+def _extract_close_history(data, tickers: list[str], key_type: str):
+    """Normalize yfinance Close data into per-ticker date/datetime price maps."""
+    prices = {}
+
+    for ticker in tickers:
+        try:
+            close_series = _close_series_for_ticker(data, ticker, len(tickers) == 1)
+        except KeyError:
+            logger.warning('No close history for ticker=%s', ticker)
+            prices[ticker] = {}
+            continue
+
+        ticker_prices = {}
+        for index, close in close_series.dropna().items():
+            try:
+                clean_price = _sanitize_price(close)
+            except ValueError:
+                continue
+
+            key = index.date() if key_type == 'date' else index.to_pydatetime()
+            ticker_prices[key] = clean_price
+
+        prices[ticker] = ticker_prices
+
+    return prices
+
+
+def _close_series_for_ticker(data, ticker: str, is_single_ticker: bool):
+    if is_single_ticker:
+        try:
+            return data[ticker]['Close']
+        except KeyError:
+            return data['Close']
+
+    return data[ticker]['Close']
 
 
 def get_price_on_date(ticker: str, date: datetime) -> float:
