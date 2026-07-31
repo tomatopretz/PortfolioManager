@@ -91,8 +91,17 @@ function AddAssetModal({ isOpen, onClose, onSubmit }) {
     return null
   }
 
+  const handleBackdropClick = (event) => {
+    if (event.target === event.currentTarget) {
+      handleClose()
+    }
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm"
+      onClick={handleBackdropClick}
+    >
       <div className="w-full max-w-xl rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-[var(--shadow-lg)]">
         <div className="mb-6 flex items-center justify-between">
           <div>
