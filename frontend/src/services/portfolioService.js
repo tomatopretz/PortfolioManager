@@ -7,8 +7,8 @@ const enrichItem = (item) => {
   const isCash = item.assetType === 'cash';
   const currentPrice = isCash ? 1 : item.currentPrice ?? 0;
   const marketValue = isCash ? item.quantity : item.marketValue ?? 0;
-  const gainLoss = isCash ? 0 : item.unrealizedPnL ?? (marketValue - item.costBasis * item.quantity);
-  const gainLossPercent = item.costBasis > 0 ? (gainLoss / (item.costBasis * item.quantity)) * 100 : 0;
+  const gainLoss = isCash ? 0 : item.unrealizedPnL ?? (marketValue - item.costBasis);
+  const gainLossPercent = item.costBasis > 0 ? (gainLoss / (item.costBasis)) * 100 : 0;
 
   return {
     ...item,

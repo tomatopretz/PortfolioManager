@@ -36,6 +36,7 @@ export const usePortfolio = () => {
 
   useEffect(() => {
     fetchItems()
+    fetchPerformance(timeRange)
   }, [])
 
   useEffect(() => {
@@ -82,7 +83,7 @@ export const usePortfolio = () => {
   }
 
   const getTotalCostBasis = () => {
-    return items.reduce((sum, item) => sum + (item.costBasis * item.quantity || 0), 0) 
+    return items.reduce((sum, item) => sum + (item.costBasis || 0), 0) 
   }
 
   const getTotalReturn = () => {
