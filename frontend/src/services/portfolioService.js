@@ -3,15 +3,22 @@ import { get, post } from './api';
 // also expect gainLoss/gainLossPercent (as the mock service produces), so derive those here.
 // CASH has no price concept on the backend (currentPrice/marketValue are null) - it's worth
 // exactly its quantity in dollars, so it's priced at par instead of being dropped from totals.
+const normalizeAssetType = (value) => (typeof value === 'string' ? value.toLowerCase() : '');
+const isCashItem = (item) => {
+  if (!item) return false;
+  return normalizeAssetType(item.assetType) === 'cash';
+};
+
 const enrichItem = (item) => {
-  const isCash = item.assetType === 'cash';
+  const isCash = isCashItem(item);
   const currentPrice = isCash ? 1 : item.currentPrice ?? 0;
-  const marketValue = isCash ? item.quantity : item.marketValue ?? 0;
+  const marketValue = isCash ? Number(item.quantity ?? 0) : (item.marketValue ?? 0);
   const gainLoss = isCash ? 0 : item.unrealizedPnL ?? (marketValue - item.costBasis);
   const gainLossPercent = item.costBasis > 0 ? (gainLoss / (item.costBasis)) * 100 : 0;
 
   return {
     ...item,
+    assetType: normalizeAssetType(item.assetType) || item.assetType,
     currentPrice,
     marketValue,
     gainLoss,

@@ -42,7 +42,13 @@ function DashboardPage() {
     )
   }
 
-  const nonCashItems = items.filter((item) => item.assetType !== 'cash')
+  const allocationItems = items.filter((item) => Number(item.marketValue ?? 0) > 0)
+
+  const nonCashItems = items.filter((item) => {
+    const assetType = String(item.assetType || '').toLowerCase()
+    const ticker = String(item.ticker || '').toUpperCase()
+    return assetType !== 'cash' && Number(item.marketValue ?? 0) > 0
+  })
 
   if (nonCashItems.length === 0) {
     return (
@@ -61,7 +67,7 @@ function DashboardPage() {
       {/* Row 1: Pie Chart & Performance Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1">
-          <AllocationPieChart items={nonCashItems} />
+          <AllocationPieChart items={allocationItems} />
         </div>
         <div className="lg:col-span-2">
           {loading ? (

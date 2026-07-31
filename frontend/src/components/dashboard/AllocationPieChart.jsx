@@ -17,13 +17,18 @@ function AllocationPieChart({ items }) {
 
   const assetTypes = {}
   items.forEach((item) => {
-    if (item.assetType !== 'cash' && item.marketValue > 0) {
-      assetTypes[item.assetType] = (assetTypes[item.assetType] || 0) + item.marketValue
+    const normalizedAssetType = String(item.assetType || '').toLowerCase()
+    const normalizedTicker = String(item.ticker || '').toUpperCase()
+    const isCash = normalizedAssetType === 'cash'
+
+    if (Number(item.marketValue ?? 0) > 0) {
+      const key = isCash ? 'Cash' : (item.assetType || normalizedTicker)
+      assetTypes[key] = (assetTypes[key] || 0) + Number(item.marketValue ?? 0)
     }
   })
 
   const data = Object.entries(assetTypes).map(([type, value]) => ({
-    name: type.charAt(0).toUpperCase() + type.slice(1),
+    name: type === 'Cash' ? 'Cash' : type.charAt(0).toUpperCase() + type.slice(1),
     value: Math.round(value * 100) / 100,
     assetType: type,
   }))
