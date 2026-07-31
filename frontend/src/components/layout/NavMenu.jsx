@@ -2,14 +2,14 @@ import { NavLink } from 'react-router-dom'
 
 function NavMenu() {
   return (
-    <nav className="bg-white border-b border-[var(--gridline)]">
-      <div className="px-6 flex gap-8">
+    <nav className="border-b border-[var(--gridline)] bg-[var(--surface-1)]">
+      <div className="flex gap-8 px-6">
         <NavLink
           to="/"
           className={({ isActive }) =>
-            `py-4 px-2 border-b-2 ${
+            `border-b-2 px-2 py-4 ${
               isActive
-                ? 'border-[var(--series-1)] font-semibold'
+                ? 'border-[var(--series-1)] font-semibold text-[var(--text-primary)]'
                 : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`
           }
@@ -19,9 +19,9 @@ function NavMenu() {
         <NavLink
           to="/holdings"
           className={({ isActive }) =>
-            `py-4 px-2 border-b-2 ${
+            `border-b-2 px-2 py-4 ${
               isActive
-                ? 'border-[var(--series-1)] font-semibold'
+                ? 'border-[var(--series-1)] font-semibold text-[var(--text-primary)]'
                 : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`
           }
@@ -31,9 +31,9 @@ function NavMenu() {
         <NavLink
           to="/analytics"
           className={({ isActive }) =>
-            `py-4 px-2 border-b-2 ${
+            `border-b-2 px-2 py-4 ${
               isActive
-                ? 'border-[var(--series-1)] font-semibold'
+                ? 'border-[var(--series-1)] font-semibold text-[var(--text-primary)]'
                 : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`
           }

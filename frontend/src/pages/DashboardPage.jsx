@@ -31,11 +31,11 @@ function DashboardPage() {
 
   if (error && items.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-red-300 p-6 shadow-sm">
-        <p className="text-red-700 font-semibold">
+      <div className="rounded-xl border border-[var(--status-serious)] bg-[var(--surface-1)] p-6 shadow-[var(--shadow-sm)]">
+        <p className="font-semibold text-[var(--status-serious)]">
           Error loading portfolio
         </p>
-        <p className="text-gray-700 text-sm mt-1">
+        <p className="mt-1 text-sm text-[var(--text-secondary)]">
           {error}
         </p>
       </div>
@@ -65,7 +65,7 @@ function DashboardPage() {
         </div>
         <div className="lg:col-span-2">
           {loading ? (
-            <div className="bg-white rounded-xl border border-gray-200 p-8 flex items-center justify-center h-96 shadow-sm">
+            <div className="flex h-96 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-8 shadow-[var(--shadow-sm)]">
               <LoadingSpinner />
             </div>
           ) : (
