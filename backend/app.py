@@ -32,6 +32,12 @@ app.register_blueprint(performance_bp)
 api.register(app)  # UI served at /apidocs/swagger
 
 
+@app.after_request
+def add_no_cache_headers(response):
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
 @app.route('/health', methods=['GET'])
 def health_check():
     return {'status': 'healthy'}, 200
