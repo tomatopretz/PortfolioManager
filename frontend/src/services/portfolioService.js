@@ -25,8 +25,8 @@ export const getPortfolioItems = async () => {
 };
 
 export const getPerformance = async (range = 'all') => {
-  const response = await get(`/api/portfolio/performance?range=${range}`);
-  return response.data || [];
+  const response = await get(`/api/performance?range=${range}`);
+  return response?.ranges ? response.ranges[range.toUpperCase()] || [] : (response.data || []);
 };
 
 export const getCurrentPrices = async (tickers) => {
@@ -39,12 +39,12 @@ export const getCurrentPrices = async (tickers) => {
 };
 
 export const buyAsset = async (payload) => {
-  const response = await post('/api/portfolio/add-asset', payload);
+  const response = await post('/api/portfolio', payload);
   return response;
 };
 
 export const sellAsset = async (payload) => {
-  const response = await post('/api/portfolio/remove-asset', payload);
+  const response = await post('/api/portfolio', payload);
   return response;
 };
 

@@ -8,8 +8,6 @@
     "jsx": "react-jsx",
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
-    "jsx": "react-jsx",
-    "allowJs": true,
 
     /* Bundler mode */
     "moduleResolution": "bundler",
