@@ -123,6 +123,20 @@ def test_record_transaction_rejects_usd_ticker_with_non_cash_asset_type(client):
     assert response.status_code == 422
 
 
+def test_record_transaction_rejects_fractional_quantity_for_non_cash(client):
+    response = client.post('/api/transactions', json=_buy_body(quantity=1.5))
+    assert response.status_code == 422
+
+
+@patch('routes.transactions.TransactionService.record_transaction')
+def test_record_transaction_allows_fractional_quantity_for_cash(mock_record_transaction, client):
+    mock_record_transaction.return_value = _transaction()
+    response = client.post(
+        '/api/transactions', json=_buy_body(ticker='usd', assetType='cash', price=None, quantity=12.34),
+    )
+    assert response.status_code == 201
+
+
 @patch('routes.transactions.TransactionService.record_transaction')
 def test_record_transaction_returns_404_when_item_not_found(mock_record_transaction, client):
     mock_record_transaction.side_effect = PortfolioItemNotFoundError("No portfolio item found for ticker 'AAPL'")
