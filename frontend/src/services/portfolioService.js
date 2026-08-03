@@ -57,12 +57,12 @@ export const getCurrentPrices = async (tickers) => {
 };
 
 export const buyAsset = async (payload) => {
-  const response = await post('/api/portfolio', payload);
+  const response = await post('/api/transactions', payload);
   return response;
 };
 
 export const sellAsset = async (payload) => {
-  const response = await post('/api/portfolio', payload);
+  const response = await post('/api/transactions', payload);
   return response;
 };
 
