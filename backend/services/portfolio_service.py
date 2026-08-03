@@ -8,6 +8,12 @@ from services.portfolio_item_service import PortfolioItemService
 from utils.rounding import round_money
 
 
+def _get_current_price(item: PortfolioItemDTO) -> Optional[float]:
+    if item.assetType == CASH_ASSET_TYPE:
+        return None
+    return price_service.list_current_prices([item.ticker]).get(item.ticker)
+
+
 def _to_result_dto(item: PortfolioItemDTO, current_price: Optional[float]) -> PortfolioItemResultDTO:
     """Compute currentPrice/marketValue/unrealizedPnL for one item.
 
@@ -63,10 +69,12 @@ class PortfolioService:
         item = PortfolioItemService.get_portfolio_item_by_ticker_and_asset_type(ticker, asset_type)
         if item is None:
             return None
+        return _to_result_dto(item, _get_current_price(item))
 
-        if item.assetType == CASH_ASSET_TYPE:
-            current_price = None
-        else:
-            current_price = price_service.list_current_prices([item.ticker]).get(item.ticker)
-
-        return _to_result_dto(item, current_price)
+    @staticmethod
+    def toggle_favourite(ticker: str, asset_type: str) -> Optional[PortfolioItemResultDTO]:
+        """Flip isFavourite for a single portfolio item. Returns None if no such item exists."""
+        item = PortfolioItemService.toggle_favourite(ticker, asset_type)
+        if item is None:
+            return None
+        return _to_result_dto(item, _get_current_price(item))

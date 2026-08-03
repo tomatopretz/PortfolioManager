@@ -47,3 +47,23 @@ def get_portfolio_item(ticker: str, asset_type: str) -> tuple[dict, int]:
         return {'error': f"No portfolio item found for ticker '{ticker.upper()}' ({asset_type.upper()})"}, 404
 
     return item.model_dump(), 200
+
+
+# PATCH /api/portfolio/<ticker>/<assetType>/favourite - flip isFavourite for a single holding
+@portfolio_bp.route('/<ticker>/<asset_type>/favourite', methods=['PATCH'])
+@api.validate(
+    resp=Response(HTTP_200=PortfolioItemResultDTO, HTTP_404=ErrorResultDTO, HTTP_502=ErrorResultDTO, validate=False),
+    tags=['Portfolio'],
+)
+def toggle_favourite(ticker: str, asset_type: str) -> tuple[dict, int]:
+    """Flip isFavourite for a single portfolio holding, identified by ticker + assetType."""
+    try:
+        item = PortfolioService.toggle_favourite(ticker, asset_type)
+    except Exception as e:
+        logger.exception('Failed to toggle favourite ticker=%s assetType=%s', ticker, asset_type)
+        return {'error': f'Failed to toggle favourite: {e}'}, 502
+
+    if item is None:
+        return {'error': f"No portfolio item found for ticker '{ticker.upper()}' ({asset_type.upper()})"}, 404
+
+    return item.model_dump(), 200

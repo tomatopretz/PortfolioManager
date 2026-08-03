@@ -89,3 +89,24 @@ def test_get_portfolio_item_cash_has_no_price_or_pnl(mock_get_item, mock_list_pr
     assert result.marketValue == 500
     assert result.unrealizedPnL is None
     mock_list_prices.assert_not_called()  # CASH never needs a price lookup
+
+
+@patch('services.portfolio_service.PortfolioItemService.toggle_favourite')
+def test_toggle_favourite_returns_none_when_item_not_found(mock_toggle_favourite):
+    mock_toggle_favourite.return_value = None
+    assert PortfolioService.toggle_favourite('AAPL', 'STOCK') is None
+
+
+@patch('services.portfolio_service.price_service.list_current_prices')
+@patch('services.portfolio_service.PortfolioItemService.toggle_favourite')
+def test_toggle_favourite_returns_enriched_item(mock_toggle_favourite, mock_list_prices):
+    item = _item('AAPL', quantity=10, cost_basis=1000)
+    item.isFavourite = True
+    mock_toggle_favourite.return_value = item
+    mock_list_prices.return_value = {'AAPL': 150.0}
+
+    result = PortfolioService.toggle_favourite('aapl', 'stock')
+
+    mock_toggle_favourite.assert_called_once_with('aapl', 'stock')
+    assert result.isFavourite is True
+    assert result.marketValue == 1500.0
