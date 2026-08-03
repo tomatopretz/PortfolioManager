@@ -5,6 +5,7 @@ from models.PortfolioItemResultDTO import PortfolioItemResultDTO
 from models.RecordTransactionRequestDTO import CASH_ASSET_TYPE
 from services import price_service
 from services.portfolio_item_service import PortfolioItemService
+from utils.rounding import round_money
 
 
 def _to_result_dto(item: PortfolioItemDTO, current_price: Optional[float]) -> PortfolioItemResultDTO:
@@ -17,17 +18,17 @@ def _to_result_dto(item: PortfolioItemDTO, current_price: Optional[float]) -> Po
     """
     is_cash = item.assetType == CASH_ASSET_TYPE
     if is_cash:
-        market_value = item.quantity
+        market_value = round_money(item.quantity)
     else:
-        market_value = None if current_price is None else round(item.quantity * current_price, 2)
-    unrealized_pnl = None if is_cash or market_value is None else round(market_value - item.costBasis, 2)
+        market_value = None if current_price is None else round_money(item.quantity * current_price)
+    unrealized_pnl = None if is_cash or market_value is None else round_money(market_value - item.costBasis)
 
     return PortfolioItemResultDTO(
         id=item.id,
         ticker=item.ticker,
         assetType=item.assetType,
-        quantity=item.quantity,
-        costBasis=item.costBasis,
+        quantity=round_money(item.quantity),
+        costBasis=round_money(item.costBasis),
         isFavourite=item.isFavourite,
         lastUpdated=item.lastUpdated.isoformat() if item.lastUpdated else None,
         currentPrice=None if is_cash else current_price,
