@@ -14,7 +14,8 @@ function DashboardPage() {
   const {
     items,
     performance,
-    loading,
+    itemsLoading,
+    performanceLoading,
     error,
     timeRange,
     setTimeRange,
@@ -26,7 +27,7 @@ function DashboardPage() {
 
   const [isAddAssetModalOpen, setIsAddAssetModalOpen] = useState(false)
 
-  if (loading && items.length === 0) {
+  if (itemsLoading && items.length === 0) {
     return (
       <div className="flex items-center justify-center h-96">
         <LoadingSpinner />
@@ -84,7 +85,7 @@ function DashboardPage() {
             <AllocationPieChart items={allocationItems} />
           </div>
           <div className="lg:col-span-2">
-            {loading ? (
+            {performanceLoading ? (
               <div className="flex h-96 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-8 shadow-[var(--shadow-sm)]">
                 <LoadingSpinner />
               </div>
@@ -98,8 +99,8 @@ function DashboardPage() {
           </div>
         </div>
 
-        {/* Row 2: Holdings Table */}
-        {nonCashItems.length > 0 && <HoldingsPreview items={nonCashItems} />}
+        {/* Row 2: Holdings Table - wait for the items fetch to fully resolve so holdings never render partially */}
+        {!itemsLoading && nonCashItems.length > 0 && <HoldingsPreview items={nonCashItems} />}
 
         {/* Row 3: Summary Stats (4 cards) */}
         <SummaryStats

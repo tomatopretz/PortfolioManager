@@ -109,7 +109,9 @@ export const usePortfolio = () => {
   return {
     items,
     performance,
-    loading,
+    loading: itemsLoading || performanceLoading,
+    itemsLoading,
+    performanceLoading,
     error,
     timeRange,
     setTimeRange,
