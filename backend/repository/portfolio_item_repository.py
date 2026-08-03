@@ -39,13 +39,21 @@ class PortfolioItemRepository:
 
     @staticmethod
     def get_by_ticker_and_asset_type(
-        ticker: str, asset_type: str, conn: Optional[Connection] = None,
+        ticker: str, asset_type: str, conn: Optional[Connection] = None, for_update: bool = False,
     ) -> Optional[PortfolioItemDTO]:
+        """`for_update=True` takes a row lock (SELECT ... FOR UPDATE), blocking any other
+        transaction trying to read-then-write the same row until this one commits or rolls
+        back. Required for read-modify-write flows (recording a transaction that adjusts this
+        item's quantity/costBasis) to avoid lost updates from overlapping requests; must be
+        called with a `conn` from an active transaction - a lock taken on an auto-committing
+        one-off connection is released immediately, defeating the point."""
+        if for_update and conn is None:
+            raise ValueError('for_update=True requires an explicit conn from an active transaction')
         with get_cursor(conn) as cur:
-            cur.execute(
-                f'SELECT {_COLUMNS} FROM {TABLE} WHERE ticker = %s AND asset_type = %s',
-                (ticker, asset_type),
-            )
+            query = f'SELECT {_COLUMNS} FROM {TABLE} WHERE ticker = %s AND asset_type = %s'
+            if for_update:
+                query += ' FOR UPDATE'
+            cur.execute(query, (ticker, asset_type))
             row = cur.fetchone()
             return _row_to_item(row) if row else None
 
