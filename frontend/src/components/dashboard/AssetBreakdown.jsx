@@ -11,7 +11,9 @@ function AssetBreakdown({ items }) {
   let totalValue = 0
 
   items.forEach((item) => {
-    if (item.assetType !== 'cash') {
+    const assetType = String(item.assetType || '').toLowerCase()
+    const ticker = String(item.ticker || '').toUpperCase()
+    if (assetType !== 'cash' && item.marketValue > 0) {
       assetBreakdown[item.assetType] = (assetBreakdown[item.assetType] || 0) + item.marketValue
       totalValue += item.marketValue
     }

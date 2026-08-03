@@ -78,8 +78,12 @@ export const usePortfolio = () => {
   }
 
   const getCashBalance = () => {
-    const cashItem = items.find((i) => i.ticker === 'CASH')
-    return cashItem ? cashItem.quantity : 0
+    const cashItem = items.find((i) => {
+      const ticker = String(i.ticker || '').toUpperCase()
+      const assetType = String(i.assetType || '').toLowerCase()
+      return ticker === 'CASH' || assetType === 'cash'
+    })
+    return cashItem ? Number(cashItem.marketValue ?? cashItem.quantity ?? 0) : 0
   }
 
   const getTotalCostBasis = () => {

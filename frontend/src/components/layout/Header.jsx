@@ -1,4 +1,5 @@
 import { usePortfolioContext } from '../../context/PortfolioContext'
+import AddAssetButton from '../portfolio/AddAssetButton'
 
 function Header() {
   const { getTotalValue, getTotalReturn } = usePortfolioContext()
@@ -46,10 +47,11 @@ function Header() {
 
           {/* Buttons */}
           <div className="flex gap-2.5">
-            <button className="rounded-lg bg-[var(--primary)] px-5 py-2 text-sm font-semibold text-white transition-all duration-200 hover:bg-[var(--primary-dark)] hover:shadow-md hover:-translate-y-0.5 active:translate-y-0">
-              Add Asset
-            </button>
-            <button className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-5 py-2 text-sm font-semibold text-[var(--text-primary)] transition-all duration-200 hover:bg-[var(--surface-3)] hover:shadow-md hover:-translate-y-0.5 active:translate-y-0">
+            <AddAssetButton />
+            <button
+              type="button"
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-5 py-2 text-sm font-semibold text-[var(--text-primary)] transition-all duration-200 hover:bg-[var(--surface-3)] hover:shadow-md hover:-translate-y-0.5 active:translate-y-0"
+            >
               Sell Asset
             </button>
           </div>
