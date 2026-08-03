@@ -57,3 +57,11 @@ class RecordTransactionRequestDTO(BaseModel):
                 f"ticker must be '{CASH_TICKER}' when assetType is '{CASH_ASSET_TYPE}', and vice versa"
             )
         return self
+
+    @model_validator(mode='after')
+    def _require_whole_quantity_unless_cash(self) -> 'RecordTransactionRequestDTO':
+        # CASH is dollars-and-cents (fractional is normal); shares/units of anything else must
+        # be whole numbers - no fractional shares
+        if self.assetType != CASH_ASSET_TYPE and not self.quantity.is_integer():
+            raise ValueError('quantity must be a whole number when assetType is not CASH')
+        return self

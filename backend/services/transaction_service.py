@@ -9,6 +9,7 @@ from models.RecordTransactionRequestDTO import CASH_ASSET_TYPE, CASH_TICKER, Rec
 from models.TransactionDTO import TransactionDTO
 from repository.portfolio_item_repository import PortfolioItemRepository
 from repository.transaction_repository import TransactionRepository
+from utils.rounding import round_money
 
 
 class InsufficientCashError(ValueError):
@@ -70,8 +71,8 @@ def _add_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Conne
 
 def _deposit_cash(request: RecordTransactionRequestDTO, date: datetime, conn: Connection) -> TransactionDTO:
     cash = _get_cash_item(conn)
-    cash.quantity += request.quantity
-    cash.costBasis += request.quantity  # cash costBasis is always 1:1 with quantity
+    cash.quantity = round_money(cash.quantity + request.quantity)
+    cash.costBasis = round_money(cash.costBasis + request.quantity)  # cash costBasis is always 1:1 with quantity
     PortfolioItemRepository.update(cash, conn=conn)
 
     return _record_cash_movement(cash.id, 'buy', request.quantity, date, conn)
@@ -80,13 +81,13 @@ def _deposit_cash(request: RecordTransactionRequestDTO, date: datetime, conn: Co
 def _buy_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Connection) -> TransactionDTO:
     if request.useCash:
         cash = _get_cash_item(conn)
-        cost = request.quantity * request.price
+        cost = round_money(request.quantity * request.price)
         if cash.quantity < cost:
             raise InsufficientCashError(
                 f'CASH balance {cash.quantity} is less than purchase cost {cost}'
             )
-        cash.quantity -= cost
-        cash.costBasis -= cost  # cash costBasis always mirrors quantity 1:1
+        cash.quantity = round_money(cash.quantity - cost)
+        cash.costBasis = round_money(cash.costBasis - cost)  # cash costBasis always mirrors quantity 1:1
         PortfolioItemRepository.update(cash, conn=conn)
         _record_cash_movement(cash.id, 'sell', cost, date, conn)
 
@@ -94,16 +95,16 @@ def _buy_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Conne
         request.ticker, request.assetType, conn=conn, for_update=True,
     )
     if item is not None:
-        item.quantity += request.quantity
-        item.costBasis += request.quantity * request.price
+        item.quantity = round_money(item.quantity + request.quantity)
+        item.costBasis = round_money(item.costBasis + request.quantity * request.price)
         PortfolioItemRepository.update(item, conn=conn)
     else:
         item = PortfolioItemRepository.add(
             PortfolioItemDTO(
                 ticker=request.ticker,
                 assetType=request.assetType,
-                quantity=request.quantity,
-                costBasis=request.quantity * request.price,
+                quantity=round_money(request.quantity),
+                costBasis=round_money(request.quantity * request.price),
             ),
             conn=conn,
         )
@@ -135,8 +136,8 @@ def _withdraw_cash(request: RecordTransactionRequestDTO, date: datetime, conn: C
         raise InsufficientCashError(
             f'CASH balance {cash.quantity} is less than withdrawal amount {request.quantity}'
         )
-    cash.quantity -= request.quantity
-    cash.costBasis -= request.quantity
+    cash.quantity = round_money(cash.quantity - request.quantity)
+    cash.costBasis = round_money(cash.costBasis - request.quantity)
     PortfolioItemRepository.update(cash, conn=conn)
 
     return _record_cash_movement(cash.id, 'sell', request.quantity, date, conn)
@@ -158,15 +159,15 @@ def _sell_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Conn
             f"Cannot sell {request.quantity} of '{request.ticker}': only {item.quantity} held"
         )
 
-    proceeds = request.quantity * request.price
-    cash.quantity += proceeds
-    cash.costBasis += proceeds  # cash costBasis always mirrors quantity 1:1
+    proceeds = round_money(request.quantity * request.price)
+    cash.quantity = round_money(cash.quantity + proceeds)
+    cash.costBasis = round_money(cash.costBasis + proceeds)  # cash costBasis always mirrors quantity 1:1
     PortfolioItemRepository.update(cash, conn=conn)
     _record_cash_movement(cash.id, 'buy', proceeds, date, conn)
 
     cost_basis_per_share = item.costBasis / item.quantity
-    new_quantity = item.quantity - request.quantity
-    item.costBasis = cost_basis_per_share * new_quantity
+    new_quantity = round_money(item.quantity - request.quantity)
+    item.costBasis = round_money(cost_basis_per_share * new_quantity)
     item.quantity = new_quantity
     # kept (at quantity 0) rather than deleted: transaction.portfolio_item_id is ON DELETE
     # CASCADE, so deleting this row would wipe every transaction ever recorded against it
@@ -201,7 +202,7 @@ class TransactionService:
         """Record a buy (add asset / deposit cash) or sell (remove asset / withdraw cash).
 
         This touches two rows (CASH and/or a stock/bond PortfolioItem) plus one or two new
-        Transaction rows, and has to stay correct even when many requests hit it at once. 
+        Transaction rows, and has to stay correct even when many requests hit it at once.
         """
         date = request.date or datetime.now(timezone.utc)
         with get_transaction() as conn:

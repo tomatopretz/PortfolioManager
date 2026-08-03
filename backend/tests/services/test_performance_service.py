@@ -51,12 +51,7 @@ def test_get_performance_reconstructs_buy_sell_mixed_history_with_cash(
     mock_now,
 ):
     mock_today.return_value = date(2026, 7, 31)
-    mock_now.return_value = datetime(2026, 7, 31, 9, 35)
-    mock_list_items.return_value = [
-        _item(AAPL_ID, 'AAPL', quantity=6),
-        _item(MSFT_ID, 'MSFT', quantity=2),
-        _item(CASH_ID, 'CASH', quantity=440),
-    ]
+    mock_list_items.return_value = [_item(AAPL_ID, 'AAPL'), _item(MSFT_ID, 'MSFT'), _item(CASH_ID, 'USD')]
     mock_list_transactions.return_value = [
         _txn(AAPL_ID, 'buy', 10, 100, datetime(2026, 7, 28, 10)),
         _txn(AAPL_ID, 'sell', 4, 110, datetime(2026, 7, 29, 10)),
@@ -232,7 +227,7 @@ def test_get_performance_handles_cash_only_history(
     mock_intraday_prices,
 ):
     mock_today.return_value = date(2026, 7, 31)
-    mock_list_items.return_value = [_item(CASH_ID, 'CASH', quantity=750)]
+    mock_list_items.return_value = [_item(CASH_ID, 'USD')]
     mock_list_transactions.return_value = [
         _txn(CASH_ID, 'buy', 1000, 1, datetime(2026, 7, 30, 10)),
         _txn(CASH_ID, 'sell', 250, 1, datetime(2026, 7, 31, 10)),

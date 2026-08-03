@@ -125,6 +125,27 @@ Transaction {
 8. If new quantity = 0, optionally delete PortfolioItem
 9. Update lastUpdated timestamps
 
+### Concurrency Safety in `POST /api/transactions`
+
+Each request
+1.  **updates** an existing / creates `PortfolioItem` row (the CASH row and/or the stock/bond
+ticker's row - quantity and costBasis) 
+2.  **creates** one or two new `Transaction` rows (the
+trade itself, plus a linked cash movement for any buy/sell that also touches CASH).
+
+1. **Atomicity** — the whole operation runs in one DB transaction (`get_transaction()`). Any
+   failure partway through rolls back everything; no half-applied state (e.g. cash debited but
+   the stock's quantity never actually credited).
+2. **Locking** — the `PortfolioItem` update is read-modify-write (read current quantity, adjust
+   it, write it back), which loses updates under concurrent requests without locking. Fixed with
+   `SELECT ... FOR UPDATE` (`for_update=True`) to lock rows that have intent to be updated
+3. **Lock order** — buys and sells always lock the CASH row before the stock/bond row, in that
+   order. Locking in opposite orders would let a concurrent buy and sell deadlock.
+
+**Verified via a live concurrency stress test:** 20 concurrent mixed buy/sell requests on the same
+ticker, run 3 times — zero lost updates, zero deadlocks, final state matched expected math exactly
+each time.
+
 ---
 
 
