@@ -1,4 +1,4 @@
-function TimeRangeFilter({ timeRange, onTimeRangeChange }) {
+function TimeRangeFilter({ currentRange, onChange }) {
   const ranges = [
     { key: '1d', label: '1D' },
     { key: '1w', label: '1W' },
@@ -13,9 +13,9 @@ function TimeRangeFilter({ timeRange, onTimeRangeChange }) {
       {ranges.map((range) => (
         <button
           key={range.key}
-          onClick={() => onTimeRangeChange(range.key)}
+          onClick={() => onChange(range.key)}
           className={`rounded-md px-4 py-2 text-sm font-semibold transition-all duration-200 ${
-            timeRange === range.key
+            currentRange === range.key
               ? 'bg-[var(--primary)] text-white shadow-sm'
               : 'text-[var(--text-secondary)] hover:bg-[var(--surface-3)] hover:text-[var(--text-primary)]'
           }`}
