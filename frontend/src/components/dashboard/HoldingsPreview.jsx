@@ -1,13 +1,28 @@
 import { Link } from 'react-router-dom'
 
+const MAX_PREVIEW_ITEMS = 10
+
+const capitalize = (value) => {
+  const str = String(value || '')
+  return str.charAt(0).toUpperCase() + str.slice(1)
+}
+
 function HoldingsPreview({ items }) {
-  const holdings = items
-    .filter((item) => {
-      const assetType = String(item.assetType || '').toLowerCase()
-      const ticker = String(item.ticker || '').toUpperCase()
-      return assetType !== 'cash' && Number(item.marketValue ?? 0) > 0
-    })
-    .sort((a, b) => b.marketValue - a.marketValue)
+  const eligible = items.filter((item) => {
+    const assetType = String(item.assetType || '').toLowerCase()
+    return assetType !== 'cash' && Number(item.marketValue ?? 0) > 0
+  })
+
+  const favourited = eligible.filter((item) => item.isFavourite)
+  const remainingSlots = Math.max(MAX_PREVIEW_ITEMS - favourited.length, 0)
+  const topPerformers = eligible
+    .filter((item) => !item.isFavourite)
+    .sort((a, b) => (b.gainLossPercent ?? 0) - (a.gainLossPercent ?? 0))
+    .slice(0, remainingSlots)
+
+  const holdings = [...favourited, ...topPerformers].sort((a, b) =>
+    String(a.ticker).localeCompare(String(b.ticker))
+  )
 
   if (holdings.length === 0) {
     return null
@@ -33,6 +48,9 @@ function HoldingsPreview({ items }) {
             <tr className="border-b border-[var(--border)] bg-[var(--surface-2)]">
               <th className="px-4 py-3 text-left font-semibold text-[var(--text-secondary)]">
                 Symbol
+              </th>
+              <th className="px-4 py-3 text-left font-semibold text-[var(--text-secondary)]">
+                Type
               </th>
               <th className="px-4 py-3 text-right font-semibold text-[var(--text-secondary)]">
                 Shares
@@ -62,6 +80,9 @@ function HoldingsPreview({ items }) {
                 >
                   <td className="px-4 py-4 font-semibold text-[var(--text-primary)]">
                     {item.ticker}
+                  </td>
+                  <td className="px-4 py-4 text-[var(--text-secondary)]">
+                    {capitalize(item.assetType)}
                   </td>
                   <td className="px-4 py-4 text-right text-[var(--text-secondary)]">
                     {item.quantity.toLocaleString('en-US', { maximumFractionDigits: 0 })}
