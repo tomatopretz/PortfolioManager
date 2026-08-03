@@ -96,10 +96,10 @@ def test_get_performance_reconstructs_buy_sell_mixed_history_with_cash(
         ('2026-07-31', 1310.0),
     ]
     assert [(point.date, point.value) for point in result.ranges['1D']] == [
-        ('2026-07-30T09:35:00', 1160.0),
-        ('2026-07-30T10:00:00', 1260.0),
-        ('2026-07-31T09:30:00', 1318.0),
-        ('2026-07-31T09:35:00', 1326.0),
+        ('2026-07-30T09:35:00Z', 1160.0),
+        ('2026-07-30T10:00:00Z', 1260.0),
+        ('2026-07-31T09:30:00Z', 1318.0),
+        ('2026-07-31T09:35:00Z', 1326.0),
     ]
     mock_daily_prices.assert_called_once_with(['AAPL', 'MSFT'], date(2025, 7, 31), date(2026, 7, 31))
     mock_intraday_prices.assert_called_once_with(['AAPL', 'MSFT'])
@@ -147,9 +147,9 @@ def test_get_performance_1d_holds_price_flat_while_market_closed_but_still_count
     result = PerformanceService.get_performance()
 
     assert [(point.date, point.value) for point in result.ranges['1D']] == [
-        ('2026-08-02T09:00:00', 1420.0),
-        ('2026-08-03T08:00:00', 2320.0),
-        ('2026-08-03T09:00:00', 2320.0),
+        ('2026-08-02T09:00:00Z', 1420.0),
+        ('2026-08-03T08:00:00Z', 2320.0),
+        ('2026-08-03T09:00:00Z', 2320.0),
     ]
 
 
@@ -188,8 +188,8 @@ def test_get_performance_1d_handles_timezone_aware_intraday_timestamps(
     result = PerformanceService.get_performance()
 
     assert [(point.date, point.value) for point in result.ranges['1D']] == [
-        ('2026-08-02T09:00:00', 1420.0),
-        ('2026-08-03T09:00:00', 1420.0),
+        ('2026-08-02T09:00:00Z', 1420.0),
+        ('2026-08-03T09:00:00Z', 1420.0),
     ]
 
 

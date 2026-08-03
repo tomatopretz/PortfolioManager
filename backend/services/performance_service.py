@@ -241,7 +241,9 @@ def _build_intraday_range(
 
         points.append(
             PerformancePointDTO(
-                date=timestamp.isoformat(),
+                # timestamp is naive but was normalized to UTC above; mark it explicitly so
+                # the client doesn't parse it as its own local time.
+                date=timestamp.isoformat() + 'Z',
                 value=_calculate_value(
                     holdings,
                     intraday_prices,
