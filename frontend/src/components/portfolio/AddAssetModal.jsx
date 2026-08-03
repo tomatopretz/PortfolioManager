@@ -46,7 +46,7 @@ function AddAssetModal({ isOpen, onClose, onSubmit }) {
     try {
       const payload = {
         type: 'buy',
-        ticker: isCashAsset ? 'CASH' : formData.ticker.trim().toUpperCase(),
+        ticker: isCashAsset ? 'USD' : formData.ticker.trim().toUpperCase(),
         assetType: formData.assetType,
         quantity: Number(isCashAsset ? formData.amount : formData.quantity),
         price: isCashAsset ? 1 : Number(formData.price),
