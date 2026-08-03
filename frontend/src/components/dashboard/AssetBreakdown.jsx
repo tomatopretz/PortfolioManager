@@ -1,3 +1,5 @@
+import { formatCurrency } from '../../utils/format'
+
 const COLORS = [
   '#3b82f6',
   '#f97316',
@@ -70,10 +72,7 @@ function AssetBreakdown({ items }) {
                   </div>
                 </td>
                 <td className="px-4 py-4 text-right font-semibold text-[var(--text-primary)]">
-                  ${row.value.toLocaleString('en-US', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
+                  {formatCurrency(row.value)}
                 </td>
                 <td className="px-4 py-4 text-right text-[var(--text-secondary)]">
                   {row.percent}%

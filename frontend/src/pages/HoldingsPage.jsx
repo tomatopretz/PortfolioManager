@@ -118,12 +118,19 @@ function HoldingsPage() {
   })
 
   const rows = cashItem ? [cashItem, ...sortedNonCash] : sortedNonCash
+  const holdingsCount = nonCashItems.filter((item) => !isZeroQuantity(item)).length
 
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-[var(--text-primary)]">
         Holdings
       </h2>
+
+      {error && (
+        <div className="rounded-lg border border-[var(--status-serious)] bg-[var(--status-serious)]/10 px-4 py-3 text-sm font-semibold text-[var(--status-serious)]">
+          {error}
+        </div>
+      )}
 
       <HoldingsSummaryCards items={items} totalValue={getTotalValue()} />
 
@@ -199,7 +206,7 @@ function HoldingsPage() {
                       <td className="px-4 py-4">
                         <FavouriteStar
                           active={!!item.isFavourite}
-                          disabled={cash}
+                          disabled={cash || isZeroQuantity(item)}
                           onToggle={() => handleToggleFavourite(item)}
                         />
                       </td>
@@ -237,6 +244,10 @@ function HoldingsPage() {
             </table>
           </div>
         )}
+
+        <p className="mt-4 text-right text-sm text-[var(--text-secondary)]">
+          {holdingsCount} holding{holdingsCount !== 1 ? 's' : ''}
+        </p>
       </div>
     </div>
   )

@@ -14,16 +14,19 @@ function HoldingsPreview({ items }) {
     return assetType !== 'cash' && Number(item.marketValue ?? 0) > 0
   })
 
-  const favourited = eligible.filter((item) => item.isFavourite)
+  const favourited = eligible
+    .filter((item) => item.isFavourite)
+    .sort((a, b) => String(a.ticker).localeCompare(String(b.ticker)))
   const remainingSlots = Math.max(MAX_PREVIEW_ITEMS - favourited.length, 0)
-  const topPerformers = eligible
+  const others = eligible
     .filter((item) => !item.isFavourite)
-    .sort((a, b) => (b.gainLossPercent ?? 0) - (a.gainLossPercent ?? 0))
+    .sort((a, b) => (b.marketValue ?? 0) - (a.marketValue ?? 0))
     .slice(0, remainingSlots)
 
-  const holdings = [...favourited, ...topPerformers].sort((a, b) =>
-    String(a.ticker).localeCompare(String(b.ticker))
-  )
+  // Favourites always lead, so the star always sorts to the top; the rest are the largest
+  // positions by market value.
+  const holdings = [...favourited, ...others]
+  const remainingCount = eligible.length - holdings.length
 
   if (holdings.length === 0) {
     return null
@@ -32,9 +35,14 @@ function HoldingsPreview({ items }) {
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-8 shadow-[var(--shadow-sm)]">
       <div className="mb-6 flex items-center justify-between">
-        <h3 className="text-lg font-bold text-[var(--text-primary)]">
-          Asset Holdings
-        </h3>
+        <div>
+          <h3 className="text-lg font-bold text-[var(--text-primary)]">
+            Asset Holdings
+          </h3>
+          <p className="mt-1 text-xs text-[var(--text-secondary)]">
+            Your favourites, plus top holdings by market value (max 10)
+          </p>
+        </div>
         <Link
           to="/holdings"
           className="text-sm font-semibold text-[var(--primary)] transition-colors hover:text-[var(--primary-dark)]"
@@ -114,6 +122,15 @@ function HoldingsPreview({ items }) {
           </tbody>
         </table>
       </div>
+
+      {remainingCount > 0 && (
+        <p className="mt-4 text-sm text-[var(--text-secondary)]">
+          +{remainingCount} more holding{remainingCount !== 1 ? 's' : ''} —{' '}
+          <Link to="/holdings" className="font-semibold text-[var(--primary)] hover:text-[var(--primary-dark)]">
+            View all
+          </Link>
+        </p>
+      )}
     </div>
   )
 }

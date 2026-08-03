@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getPortfolioItems, getPerformance, buyAsset, sellAsset, toggleFavourite } from '../services'
 
+const MAX_FAVOURITES = 10
+
 export const usePortfolio = () => {
   const [items, setItems] = useState([])
   const [performance, setPerformance] = useState([])
@@ -84,6 +86,16 @@ export const usePortfolio = () => {
     const isCash = String(item.assetType || '').toLowerCase() === 'cash'
     if (isCash) {
       return { success: false, error: 'CASH cannot be favourited' }
+    }
+
+    const isAddingFavourite = !item.isFavourite
+    if (isAddingFavourite) {
+      const favouriteCount = items.filter((i) => i.isFavourite).length
+      if (favouriteCount >= MAX_FAVOURITES) {
+        const message = `You can only favourite up to ${MAX_FAVOURITES} holdings.`
+        setError(message)
+        return { success: false, error: message }
+      }
     }
 
     setError(null)

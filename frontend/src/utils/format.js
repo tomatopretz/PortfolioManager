@@ -1,18 +1,19 @@
 // Intl's currency formatter puts the negative sign before the symbol (-$100.00), unlike naive
 // `$${value}` string-building which produces the wrong $-100.00.
-export const formatCurrency = (value) =>
+export const formatCurrency = (value, fractionDigits = 2) =>
   new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
   }).format(value ?? 0)
 
-export const formatCurrencyOrNA = (value) => (value == null ? 'N/A' : formatCurrency(value))
+export const formatCurrencyOrNA = (value, fractionDigits = 2) =>
+  value == null ? 'N/A' : formatCurrency(value, fractionDigits)
 
-export const formatSignedCurrencyOrNA = (value) => {
+export const formatSignedCurrencyOrNA = (value, fractionDigits = 2) => {
   if (value == null) return 'N/A'
-  const formatted = formatCurrency(value)
+  const formatted = formatCurrency(value, fractionDigits)
   return value >= 0 ? `+${formatted}` : formatted
 }
 
