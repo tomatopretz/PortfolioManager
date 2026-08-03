@@ -54,9 +54,23 @@ const mockHoldings = [
   },
 ];
 
-// Derive computed values
+// Derive computed values. A non-cash holding with no currentPrice (unresolvable ticker) is
+// valued at cost instead of $0, with gain/loss left unknown (null -> displayed as N/A).
 export const enrichHoldings = (holdings) => {
   return holdings.map((item) => {
+    const isCash = item.assetType === 'cash';
+    const priceUnavailable = !isCash && (item.currentPrice === null || item.currentPrice === undefined);
+
+    if (priceUnavailable) {
+      return {
+        ...item,
+        currentPrice: null,
+        marketValue: item.costBasis * item.quantity,
+        gainLoss: null,
+        gainLossPercent: null,
+      };
+    }
+
     const marketValue = item.quantity * item.currentPrice;
     const gainLoss = marketValue - item.costBasis * item.quantity;
     const gainLossPercent = item.costBasis > 0 ? (gainLoss / item.costBasis * item.quantity) * 100 : 0;

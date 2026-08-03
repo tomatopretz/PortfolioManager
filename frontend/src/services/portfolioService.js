@@ -9,8 +9,26 @@ const isCashItem = (item) => {
   return normalizeAssetType(item.assetType) === 'cash';
 };
 
+// A non-CASH ticker yfinance couldn't price arrives with currentPrice null. Rather than pricing
+// it at $0 (which would understate the portfolio and read as "worthless"), value it at cost and
+// leave gain/loss unknown - the UI shows N/A for price/market value/gain-loss on these rows.
+const isPriceUnavailable = (item, isCash) => !isCash && (item.currentPrice === null || item.currentPrice === undefined);
+
 const enrichItem = (item) => {
   const isCash = isCashItem(item);
+  const assetType = normalizeAssetType(item.assetType) || item.assetType;
+
+  if (isPriceUnavailable(item, isCash)) {
+    return {
+      ...item,
+      assetType,
+      currentPrice: null,
+      marketValue: item.costBasis ?? 0,
+      gainLoss: null,
+      gainLossPercent: null,
+    };
+  }
+
   const currentPrice = isCash ? 1 : item.currentPrice ?? 0;
   const marketValue = isCash ? Number(item.quantity ?? 0) : (item.marketValue ?? 0);
   const gainLoss = isCash ? 0 : item.unrealizedPnL ?? (marketValue - item.costBasis);
@@ -18,7 +36,7 @@ const enrichItem = (item) => {
 
   return {
     ...item,
-    assetType: normalizeAssetType(item.assetType) || item.assetType,
+    assetType,
     currentPrice,
     marketValue,
     gainLoss,

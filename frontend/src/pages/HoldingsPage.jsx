@@ -4,15 +4,14 @@ import LoadingSpinner from '../components/common/LoadingSpinner'
 import EmptyState from '../components/common/EmptyState'
 import FavouriteStar from '../components/holdings/FavouriteStar'
 import HoldingsSummaryCards from '../components/holdings/HoldingsSummaryCards'
+import { formatCurrency, formatSignedCurrencyOrNA, formatSignedPercentOrNA } from '../utils/format'
 
 const isCash = (item) => String(item.assetType || '').toLowerCase() === 'cash'
+const isZeroQuantity = (item) => Number(item.quantity ?? 0) === 0
 const capitalize = (value) => {
   const str = String(value || '')
   return str.charAt(0).toUpperCase() + str.slice(1)
 }
-
-const currency = (value) =>
-  `$${Number(value ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 const formatDate = (value) => {
   if (!value) return '—'
@@ -111,7 +110,12 @@ function HoldingsPage() {
   const nonCashItems = filteredItems.filter((item) => !isCash(item))
 
   const direction = sort.direction === 'asc' ? 1 : -1
-  const sortedNonCash = [...nonCashItems].sort((a, b) => direction * compareValues(a, b, sort.key))
+  const sortedNonCash = [...nonCashItems].sort((a, b) => {
+    const aZero = isZeroQuantity(a)
+    const bZero = isZeroQuantity(b)
+    if (aZero !== bZero) return aZero ? 1 : -1
+    return direction * compareValues(a, b, sort.key)
+  })
 
   const rows = cashItem ? [cashItem, ...sortedNonCash] : sortedNonCash
 
@@ -179,8 +183,13 @@ function HoldingsPage() {
               <tbody>
                 {rows.map((item) => {
                   const cash = isCash(item)
+                  const priceAvailable = item.currentPrice != null
                   const gainLossColor =
-                    item.gainLoss >= 0 ? 'text-[var(--status-good)]' : 'text-[var(--status-serious)]'
+                    item.gainLoss == null
+                      ? 'text-[var(--text-secondary)]'
+                      : item.gainLoss >= 0
+                        ? 'text-[var(--status-good)]'
+                        : 'text-[var(--status-serious)]'
 
                   return (
                     <tr
@@ -204,21 +213,19 @@ function HoldingsPage() {
                         {Number(item.quantity ?? 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}
                       </td>
                       <td className="px-4 py-4 text-right text-[var(--text-secondary)]">
-                        {currency(item.currentPrice)}
+                        {priceAvailable ? formatCurrency(item.currentPrice) : 'N/A'}
                       </td>
                       <td className="px-4 py-4 text-right text-[var(--text-secondary)]">
-                        {currency(item.costBasis)}
+                        {formatCurrency(item.costBasis)}
                       </td>
                       <td className="px-4 py-4 text-right font-semibold text-[var(--text-primary)]">
-                        {currency(item.marketValue)}
+                        {priceAvailable ? formatCurrency(item.marketValue) : 'N/A'}
                       </td>
                       <td className={`px-4 py-4 text-right font-semibold ${gainLossColor}`}>
-                        {item.gainLoss >= 0 ? '+' : ''}
-                        {currency(item.gainLoss)}
+                        {formatSignedCurrencyOrNA(item.gainLoss)}
                       </td>
                       <td className={`px-4 py-4 text-right font-semibold ${gainLossColor}`}>
-                        {item.gainLossPercent >= 0 ? '+' : ''}
-                        {Number(item.gainLossPercent ?? 0).toFixed(2)}%
+                        {formatSignedPercentOrNA(item.gainLossPercent)}
                       </td>
                       <td className="px-4 py-4 text-right text-[var(--text-secondary)]">
                         {formatDate(item.lastUpdated)}

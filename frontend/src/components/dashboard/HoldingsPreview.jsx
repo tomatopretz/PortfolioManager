@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { formatCurrency, formatSignedCurrencyOrNA, formatSignedPercentOrNA } from '../../utils/format'
 
 const MAX_PREVIEW_ITEMS = 10
 
@@ -71,7 +72,13 @@ function HoldingsPreview({ items }) {
           </thead>
           <tbody>
             {holdings.map((item) => {
-              const gainLossColor = item.gainLoss >= 0 ? 'text-[var(--status-good)]' : 'text-[var(--status-serious)]'
+              const priceAvailable = item.currentPrice != null
+              const gainLossColor =
+                item.gainLoss == null
+                  ? 'text-[var(--text-secondary)]'
+                  : item.gainLoss >= 0
+                    ? 'text-[var(--status-good)]'
+                    : 'text-[var(--status-serious)]'
 
               return (
                 <tr
@@ -88,16 +95,18 @@ function HoldingsPreview({ items }) {
                     {item.quantity.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                   </td>
                   <td className="px-4 py-4 text-right text-[var(--text-secondary)]">
-                    ${item.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {priceAvailable ? formatCurrency(item.currentPrice) : 'N/A'}
                   </td>
                   <td className="px-4 py-4 text-right text-[var(--text-secondary)]">
-                    ${item.costBasis.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {formatCurrency(item.costBasis)}
                   </td>
                   <td className="px-4 py-4 text-right font-semibold text-[var(--text-primary)]">
-                    ${item.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {priceAvailable ? formatCurrency(item.marketValue) : 'N/A'}
                   </td>
                   <td className={`px-4 py-4 text-right font-semibold ${gainLossColor}`}>
-                    ${item.gainLoss.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({item.gainLossPercent.toFixed(2)}%)
+                    {priceAvailable
+                      ? `${formatSignedCurrencyOrNA(item.gainLoss)} (${formatSignedPercentOrNA(item.gainLossPercent)})`
+                      : 'N/A'}
                   </td>
                 </tr>
               )
