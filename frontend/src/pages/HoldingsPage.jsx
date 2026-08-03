@@ -4,13 +4,19 @@ import LoadingSpinner from '../components/common/LoadingSpinner'
 import EmptyState from '../components/common/EmptyState'
 import FavouriteStar from '../components/holdings/FavouriteStar'
 import HoldingsSummaryCards from '../components/holdings/HoldingsSummaryCards'
-import { formatCurrency, formatSignedCurrencyOrNA, formatSignedPercentOrNA } from '../utils/format'
+import { formatCurrency, formatCurrencyOrNA, formatSignedCurrencyOrNA, formatSignedPercentOrNA } from '../utils/format'
 
 const isCash = (item) => String(item.assetType || '').toLowerCase() === 'cash'
 const isZeroQuantity = (item) => Number(item.quantity ?? 0) === 0
 const capitalize = (value) => {
   const str = String(value || '')
   return str.charAt(0).toUpperCase() + str.slice(1)
+}
+
+const getCostBasisPerShare = (item) => {
+  const quantity = Number(item.quantity ?? 0)
+  if (quantity === 0) return null
+  return (item.costBasis ?? 0) / quantity
 }
 
 const formatDate = (value) => {
@@ -26,6 +32,7 @@ const columns = [
   { key: 'quantity', label: 'Quantity', align: 'right' },
   { key: 'currentPrice', label: 'Current Price', align: 'right' },
   { key: 'costBasis', label: 'Cost Basis', align: 'right' },
+  { key: 'costBasisPerShare', label: 'Cost Basis / Share', align: 'right' },
   { key: 'marketValue', label: 'Market Value', align: 'right' },
   { key: 'gainLoss', label: 'Gain/Loss ($)', align: 'right' },
   { key: 'gainLossPercent', label: 'Gain/Loss (%)', align: 'right' },
@@ -33,8 +40,8 @@ const columns = [
 ]
 
 const compareValues = (a, b, key) => {
-  const av = a[key]
-  const bv = b[key]
+  const av = key === 'costBasisPerShare' ? getCostBasisPerShare(a) : a[key]
+  const bv = key === 'costBasisPerShare' ? getCostBasisPerShare(b) : b[key]
   if (typeof av === 'string' || typeof bv === 'string') {
     return String(av ?? '').localeCompare(String(bv ?? ''))
   }
@@ -224,6 +231,9 @@ function HoldingsPage() {
                       </td>
                       <td className="px-4 py-4 text-right text-[var(--text-secondary)]">
                         {formatCurrency(item.costBasis)}
+                      </td>
+                      <td className="px-4 py-4 text-right text-[var(--text-secondary)]">
+                        {formatCurrencyOrNA(getCostBasisPerShare(item))}
                       </td>
                       <td className="px-4 py-4 text-right font-semibold text-[var(--text-primary)]">
                         {priceAvailable ? formatCurrency(item.marketValue) : 'N/A'}
