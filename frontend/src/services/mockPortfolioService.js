@@ -171,10 +171,16 @@ export const sellAsset = async (payload) => {
   return { success: true, transaction };
 };
 
+export const getTransactions = async () => {
+  await simulateLatency();
+  return mockData.transactions;
+};
+
 export default {
   getPortfolioItems,
   getPerformance,
   getCurrentPrices,
   buyAsset,
   sellAsset,
+  getTransactions,
 };

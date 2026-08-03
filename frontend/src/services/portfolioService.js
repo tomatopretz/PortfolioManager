@@ -66,10 +66,16 @@ export const sellAsset = async (payload) => {
   return response;
 };
 
+export const getTransactions = async () => {
+  const response = await get('/api/transactions');
+  return response || [];
+};
+
 export default {
   getPortfolioItems,
   getPerformance,
   getCurrentPrices,
   buyAsset,
   sellAsset,
+  getTransactions,
 };
