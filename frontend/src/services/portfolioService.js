@@ -32,8 +32,19 @@ export const getPortfolioItems = async () => {
 };
 
 export const getPerformance = async (range = 'all') => {
-  const response = await get(`/api/performance?range=${range}`);
-  return response?.ranges ? response.ranges[range.toUpperCase()] || [] : (response.data || []);
+  const response = await get('/api/performance');
+  const ranges = response?.ranges || {};
+  const normalizedRange = String(range || 'all').trim().toUpperCase();
+  const selectedRange =
+    ranges[normalizedRange] ??
+    ranges[normalizedRange.toLowerCase()] ??
+    ranges[normalizedRange.toUpperCase()] ??
+    [];
+
+  return (selectedRange || []).map((point) => ({
+    date: point.date,
+    totalValue: Number(point.value ?? point.totalValue ?? 0),
+  }));
 };
 
 export const getCurrentPrices = async (tickers) => {
