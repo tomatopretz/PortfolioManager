@@ -10,6 +10,7 @@ const mockHoldings = [
     costBasis: 130,
     lastUpdated: new Date('2026-07-28'),
     currentPrice: 185.32,
+    isFavourite: false,
   },
   {
     id: 'item-2',
@@ -19,6 +20,7 @@ const mockHoldings = [
     costBasis: 130,
     lastUpdated: new Date('2026-07-28'),
     currentPrice: 168.75,
+    isFavourite: true,
   },
   {
     id: 'item-3',
@@ -28,6 +30,7 @@ const mockHoldings = [
     costBasis: 300,
     lastUpdated: new Date('2026-07-28'),
     currentPrice: 242.50,
+    isFavourite: false,
   },
   {
     id: 'item-4',
@@ -37,6 +40,7 @@ const mockHoldings = [
     costBasis: 100,
     lastUpdated: new Date('2026-07-28'),
     currentPrice: 98.50,
+    isFavourite: false,
   },
   {
     id: 'item-5',
@@ -46,6 +50,7 @@ const mockHoldings = [
     costBasis: 1,
     lastUpdated: new Date('2026-07-28'),
     currentPrice: 1,
+    isFavourite: false,
   },
 ];
 

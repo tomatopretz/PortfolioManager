@@ -1,4 +1,4 @@
-import { get, post } from './api';
+import { get, patch, post } from './api';
 // Backend returns costBasis/currentPrice/marketValue/unrealizedPnL; the dashboard components
 // also expect gainLoss/gainLossPercent (as the mock service produces), so derive those here.
 // CASH has no price concept on the backend (currentPrice/marketValue are null) - it's worth
@@ -66,10 +66,16 @@ export const sellAsset = async (payload) => {
   return response;
 };
 
+export const toggleFavourite = async (ticker, assetType) => {
+  const response = await patch(`/api/portfolio/${encodeURIComponent(ticker)}/${encodeURIComponent(assetType)}/favourite`);
+  return enrichItem(response);
+};
+
 export default {
   getPortfolioItems,
   getPerformance,
   getCurrentPrices,
   buyAsset,
   sellAsset,
+  toggleFavourite,
 };

@@ -11,5 +11,6 @@ export const getPerformance = service.getPerformance;
 export const getCurrentPrices = service.getCurrentPrices;
 export const buyAsset = service.buyAsset;
 export const sellAsset = service.sellAsset;
+export const toggleFavourite = service.toggleFavourite;
 
 export default service;

@@ -171,10 +171,30 @@ export const sellAsset = async (payload) => {
   return { success: true, transaction };
 };
 
+export const toggleFavourite = async (ticker, assetType) => {
+  await simulateLatency();
+
+  const item = mockData.items.find(
+    (i) => i.ticker === ticker && i.assetType === assetType
+  );
+  if (!item) {
+    throw new Error(`Item not found: ${ticker} (${assetType})`);
+  }
+  if (item.assetType === 'cash' && !item.isFavourite) {
+    throw new Error('CASH cannot be favourited');
+  }
+
+  item.isFavourite = !item.isFavourite;
+  mockData.items = enrichHoldings(mockData.items);
+
+  return mockData.items.find((i) => i.ticker === ticker && i.assetType === assetType);
+};
+
 export default {
   getPortfolioItems,
   getPerformance,
   getCurrentPrices,
   buyAsset,
   sellAsset,
+  toggleFavourite,
 };

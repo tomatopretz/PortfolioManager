@@ -39,8 +39,15 @@ export const post = (path, body) =>
     body: JSON.stringify(body),
   });
 
+export const patch = (path, body) =>
+  fetchJson(path, {
+    method: 'PATCH',
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+
 export default {
   get,
   post,
+  patch,
   ApiError,
 };
