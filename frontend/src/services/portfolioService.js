@@ -33,7 +33,8 @@ export const getPortfolioItems = async () => {
 
 export const getPerformance = async (range = 'all') => {
   const response = await get(`/api/performance?range=${range}`);
-  return response?.ranges ? response.ranges[range.toUpperCase()] || [] : (response.data || []);
+  const points = response?.ranges ? response.ranges[range.toUpperCase()] || [] : (response?.data || []);
+  return points.map((point) => ({ date: point.date, totalValue: point.value }));
 };
 
 export const getCurrentPrices = async (tickers) => {
