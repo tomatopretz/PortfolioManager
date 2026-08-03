@@ -8,7 +8,8 @@ from services import price_service
 from services.portfolio_item_service import PortfolioItemService
 from services.transaction_service import TransactionService
 
-CASH_TICKER = 'CASH'
+CASH_TICKER = 'USD'
+CASH_ASSET_TYPE = 'CASH'
 RANGE_KEYS = ('1D', '1W', '1M', '6M', '1Y', 'ALL')
 DAILY_RANGE_DAYS = {
     '1W': 7,
@@ -87,12 +88,16 @@ def _load_tickers_by_portfolio_item_id() -> dict[str, str]:
     return {item.id: item.ticker.upper() for item in items if item.id}
 
 
+def _is_cash_ticker(ticker: str | None) -> bool:
+    return bool(ticker) and ticker.upper() == CASH_TICKER
+
+
 def _priced_tickers(transactions, tickers_by_item_id: dict[str, str]) -> list[str]:
     return sorted({
         ticker
         for txn in transactions
         for ticker in [tickers_by_item_id.get(txn.portfolioItemId)]
-        if ticker and ticker != CASH_TICKER
+        if ticker and not _is_cash_ticker(ticker)
     })
 
 
@@ -168,7 +173,7 @@ def _apply_transaction(holdings, txn, tickers_by_item_id: dict[str, str]) -> Non
     transaction_type = txn.type.lower()
     direction = 1 if transaction_type == 'buy' else -1
 
-    if ticker == CASH_TICKER:
+    if _is_cash_ticker(ticker):
         holdings[CASH_TICKER] += direction * txn.quantity * txn.price
         return
 

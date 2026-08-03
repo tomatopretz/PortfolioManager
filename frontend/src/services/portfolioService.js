@@ -32,9 +32,19 @@ export const getPortfolioItems = async () => {
 };
 
 export const getPerformance = async (range = 'all') => {
-  const response = await get(`/api/performance?range=${range}`);
-  const points = response?.ranges ? response.ranges[range.toUpperCase()] || [] : (response?.data || []);
-  return points.map((point) => ({ date: point.date, totalValue: point.value }));
+  const response = await get('/api/performance');
+  const ranges = response?.ranges || {};
+  const normalizedRange = String(range || 'all').trim().toUpperCase();
+  const selectedRange =
+    ranges[normalizedRange] ??
+    ranges[normalizedRange.toLowerCase()] ??
+    ranges[normalizedRange.toUpperCase()] ??
+    [];
+
+  return (selectedRange || []).map((point) => ({
+    date: point.date,
+    totalValue: Number(point.value ?? point.totalValue ?? 0),
+  }));
 };
 
 export const getCurrentPrices = async (tickers) => {
@@ -47,12 +57,12 @@ export const getCurrentPrices = async (tickers) => {
 };
 
 export const buyAsset = async (payload) => {
-  const response = await post('/api/portfolio', payload);
+  const response = await post('/api/transactions', payload);
   return response;
 };
 
 export const sellAsset = async (payload) => {
-  const response = await post('/api/portfolio', payload);
+  const response = await post('/api/transactions', payload);
   return response;
 };
 

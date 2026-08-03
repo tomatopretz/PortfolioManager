@@ -157,6 +157,37 @@ def test_get_performance_handles_cash_only_history(
 @patch('services.performance_service.price_service.get_daily_price_history')
 @patch('services.performance_service.PortfolioItemService.list_portfolio_items')
 @patch('services.performance_service.TransactionService.list_transactions')
+@patch('services.performance_service._today')
+def test_get_performance_treats_usd_as_cash_when_building_history(
+    mock_today,
+    mock_list_transactions,
+    mock_list_items,
+    mock_daily_prices,
+    mock_intraday_prices,
+):
+    mock_today.return_value = date(2026, 7, 31)
+    mock_list_items.return_value = [_item(CASH_ID, 'USD')]
+    mock_list_transactions.return_value = [
+        _txn(CASH_ID, 'buy', 1000, 1, datetime(2026, 7, 30, 10)),
+        _txn(CASH_ID, 'sell', 250, 1, datetime(2026, 7, 31, 10)),
+    ]
+    mock_daily_prices.return_value = {}
+    mock_intraday_prices.return_value = {}
+
+    result = PerformanceService.get_performance()
+
+    assert [(point.date, point.value) for point in result.ranges['ALL']] == [
+        ('2026-07-30', 1000.0),
+        ('2026-07-31', 750.0),
+    ]
+    mock_daily_prices.assert_called_once_with([], date(2025, 7, 31), date(2026, 7, 31))
+    mock_intraday_prices.assert_called_once_with([])
+
+
+@patch('services.performance_service.price_service.get_intraday_price_history')
+@patch('services.performance_service.price_service.get_daily_price_history')
+@patch('services.performance_service.PortfolioItemService.list_portfolio_items')
+@patch('services.performance_service.TransactionService.list_transactions')
 def test_get_performance_returns_empty_ranges_for_empty_transaction_history(
     mock_list_transactions,
     mock_list_items,

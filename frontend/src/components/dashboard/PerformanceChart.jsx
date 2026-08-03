@@ -34,12 +34,15 @@ function PerformanceChart({ data, timeRange, onTimeRangeChange }) {
 
   const getDateLabel = (dateStr) => {
     const date = new Date(dateStr)
-    const dataIndex = data.findIndex(d => d.date === dateStr)
-    const currentDate = new Date(dateStr)
+    const dataIndex = data.findIndex((d) => d.date === dateStr)
     const nextDate = dataIndex < data.length - 1 ? new Date(data[dataIndex + 1].date) : null
 
     if (timeRange === '1d') {
       const hour = date.getHours()
+      const minute = date.getMinutes()
+      if (minute !== 0) {
+        return ''
+      }
       return `${hour === 0 ? '12' : hour > 12 ? hour - 12 : hour}${hour >= 12 ? 'p' : 'a'}`
     }
 
@@ -48,13 +51,23 @@ function PerformanceChart({ data, timeRange, onTimeRangeChange }) {
     }
 
     if (timeRange === '1m') {
-      if (!nextDate || nextDate.getMonth() !== currentDate.getMonth()) {
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      const dayOfMonth = date.getDate()
+      if (dayOfMonth % 3 !== 1 && dayOfMonth !== 1) {
+        return ''
       }
-      return ''
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     }
 
-    if (!nextDate || nextDate.getMonth() !== currentDate.getMonth()) {
+    if (timeRange === '6m' || timeRange === '1y' || timeRange === 'all') {
+      const month = date.getMonth()
+      const prevMonth = dataIndex > 0 ? new Date(data[dataIndex - 1].date).getMonth() : null
+      if (prevMonth === month) {
+        return ''
+      }
+      return date.toLocaleDateString('en-US', { month: 'short' })
+    }
+
+    if (!nextDate || nextDate.getMonth() !== date.getMonth()) {
       return date.toLocaleDateString('en-US', { month: 'short' })
     }
     return ''
@@ -86,6 +99,7 @@ function PerformanceChart({ data, timeRange, onTimeRangeChange }) {
           />
           <XAxis
             dataKey="date"
+            interval={0}
             tickFormatter={getDateLabel}
             tick={{ fontSize: 12, fill: 'var(--text-secondary)' }}
             stroke="var(--gridline)"

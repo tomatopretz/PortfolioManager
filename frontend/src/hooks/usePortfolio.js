@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { getPortfolioItems, getPerformance, buyAsset, sellAsset } from '../services'
 
 export const usePortfolio = () => {
@@ -8,22 +8,29 @@ export const usePortfolio = () => {
   const [performanceLoading, setPerformanceLoading] = useState(false)
   const [error, setError] = useState(null)
   const [timeRange, setTimeRange] = useState('all')
+  const itemsRequestId = useRef(0)
   const performanceRequestId = useRef(0)
+  const loading = itemsLoading || performanceLoading
 
-  const fetchItems = async () => {
+  const fetchItems = useCallback(async () => {
+    const requestId = ++itemsRequestId.current
     setItemsLoading(true)
     setError(null)
     try {
       const data = await getPortfolioItems()
+      if (requestId !== itemsRequestId.current) return
       setItems(data)
     } catch (err) {
+      if (requestId !== itemsRequestId.current) return
       setError(err.message)
     } finally {
-      setItemsLoading(false)
+      if (requestId === itemsRequestId.current) {
+        setItemsLoading(false)
+      }
     }
-  }
+  }, [])
 
-  const fetchPerformance = async (range = 'all') => {
+  const fetchPerformance = useCallback(async (range = 'all') => {
     const requestId = ++performanceRequestId.current
     setPerformanceLoading(true)
     setError(null)
@@ -35,45 +42,41 @@ export const usePortfolio = () => {
       if (requestId !== performanceRequestId.current) return
       setError(err.message)
     } finally {
-      if (requestId === performanceRequestId.current) setPerformanceLoading(false)
+      if (requestId === performanceRequestId.current) {
+        setPerformanceLoading(false)
+      }
     }
-  }
-
-  useEffect(() => {
-    fetchItems()
   }, [])
 
   useEffect(() => {
+    fetchItems()
+  }, [fetchItems])
+
+  useEffect(() => {
     fetchPerformance(timeRange)
-  }, [timeRange])
+  }, [fetchPerformance, timeRange])
 
   const handleBuy = async (payload) => {
-    setItemsLoading(true)
     setError(null)
     try {
       await buyAsset(payload)
-      await fetchItems()
+      await Promise.all([fetchItems(), fetchPerformance(timeRange)])
       return { success: true }
     } catch (err) {
       setError(err.message)
       return { success: false, error: err.message }
-    } finally {
-      setItemsLoading(false)
     }
   }
 
   const handleSell = async (payload) => {
-    setItemsLoading(true)
     setError(null)
     try {
       await sellAsset(payload)
-      await fetchItems()
+      await Promise.all([fetchItems(), fetchPerformance(timeRange)])
       return { success: true }
     } catch (err) {
       setError(err.message)
       return { success: false, error: err.message }
-    } finally {
-      setItemsLoading(false)
     }
   }
 
