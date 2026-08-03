@@ -173,10 +173,10 @@ function HoldingsPage() {
             No holdings match your search/filter.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="max-h-[540px] overflow-y-auto overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--border)] bg-[var(--surface-2)]">
+                <tr className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--surface-2)]">
                   <th className="px-4 py-3 text-left font-semibold text-[var(--text-secondary)]">
                     Fav
                   </th>
