@@ -18,6 +18,11 @@ class PortfolioItemService:
         return PortfolioItemRepository.get_by_ticker(ticker.upper())
 
     @staticmethod
+    def get_portfolio_item_by_ticker_and_asset_type(ticker: str, asset_type: str) -> Optional[PortfolioItemDTO]:
+        """Get a single portfolio item by its natural key (ticker + assetType)."""
+        return PortfolioItemRepository.get_by_ticker_and_asset_type(ticker.upper(), asset_type.upper())
+
+    @staticmethod
     def list_portfolio_items() -> list[PortfolioItemDTO]:
         """List all portfolio items (current holdings)."""
         return PortfolioItemRepository.list_all()
