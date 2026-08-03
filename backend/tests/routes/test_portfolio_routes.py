@@ -54,3 +54,63 @@ def test_portfolio_does_not_accept_post(client):
     # See POST /api/transactions for recording the buy/sell/deposit/withdraw that produces one.
     response = client.post('/api/portfolio', json={})
     assert response.status_code == 405
+
+
+# --- GET /api/portfolio/<ticker>/<assetType> -----------------------------------------------------
+
+def _result_item(**overrides):
+    defaults = dict(
+        id='1', ticker='AAPL', assetType='STOCK', quantity=10, costBasis=1000,
+        currentPrice=150, marketValue=1500, unrealizedPnL=500,
+    )
+    defaults.update(overrides)
+    return PortfolioItemResultDTO(**defaults)
+
+
+@patch('routes.portfolio.PortfolioService.get_portfolio_item')
+def test_get_portfolio_item_returns_item(mock_get_portfolio_item, client):
+    mock_get_portfolio_item.return_value = _result_item()
+    response = client.get('/api/portfolio/AAPL/STOCK')
+    assert response.status_code == 200
+    assert response.json['ticker'] == 'AAPL'
+    mock_get_portfolio_item.assert_called_once_with('AAPL', 'STOCK')
+
+
+@patch('routes.portfolio.PortfolioService.get_portfolio_item')
+def test_get_portfolio_item_returns_404_when_not_found(mock_get_portfolio_item, client):
+    mock_get_portfolio_item.return_value = None
+    response = client.get('/api/portfolio/AAPL/STOCK')
+    assert response.status_code == 404
+    assert 'AAPL' in response.json['error']
+
+
+@patch('routes.portfolio.PortfolioService.get_portfolio_item')
+def test_get_portfolio_item_returns_502_on_failure(mock_get_portfolio_item, client):
+    mock_get_portfolio_item.side_effect = ConnectionError('DB unreachable')
+    response = client.get('/api/portfolio/AAPL/STOCK')
+    assert response.status_code == 502
+
+
+# --- PATCH /api/portfolio/<ticker>/<assetType>/favourite -----------------------------------------
+
+@patch('routes.portfolio.PortfolioService.toggle_favourite')
+def test_toggle_favourite_returns_updated_item(mock_toggle_favourite, client):
+    mock_toggle_favourite.return_value = _result_item(isFavourite=True)
+    response = client.patch('/api/portfolio/AAPL/STOCK/favourite')
+    assert response.status_code == 200
+    assert response.json['isFavourite'] is True
+    mock_toggle_favourite.assert_called_once_with('AAPL', 'STOCK')
+
+
+@patch('routes.portfolio.PortfolioService.toggle_favourite')
+def test_toggle_favourite_returns_404_when_not_found(mock_toggle_favourite, client):
+    mock_toggle_favourite.return_value = None
+    response = client.patch('/api/portfolio/AAPL/STOCK/favourite')
+    assert response.status_code == 404
+
+
+@patch('routes.portfolio.PortfolioService.toggle_favourite')
+def test_toggle_favourite_returns_502_on_failure(mock_toggle_favourite, client):
+    mock_toggle_favourite.side_effect = ConnectionError('DB unreachable')
+    response = client.patch('/api/portfolio/AAPL/STOCK/favourite')
+    assert response.status_code == 502

@@ -41,3 +41,15 @@ class PortfolioItemService:
     def delete_portfolio_item(item_id: str) -> None:
         """Delete a portfolio item."""
         PortfolioItemRepository.delete(item_id)
+
+    @staticmethod
+    def toggle_favourite(ticker: str, asset_type: str) -> Optional[PortfolioItemDTO]:
+        """Flip isFavourite for the item at this natural key. Returns None if no such item
+        exists, otherwise the updated item."""
+        item = PortfolioItemService.get_portfolio_item_by_ticker_and_asset_type(ticker, asset_type)
+        if item is None:
+            return None
+        new_value = not item.isFavourite
+        PortfolioItemRepository.set_favourite(item.id, new_value)
+        item.isFavourite = new_value
+        return item

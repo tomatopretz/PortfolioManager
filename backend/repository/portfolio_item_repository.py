@@ -92,3 +92,15 @@ class PortfolioItemRepository:
     def delete(item_id: str, conn: Optional[Connection] = None) -> None:
         with get_cursor(conn) as cur:
             cur.execute(f'DELETE FROM {TABLE} WHERE id = %s', (item_id,))
+
+    @staticmethod
+    def set_favourite(item_id: str, is_favourite: bool, conn: Optional[Connection] = None) -> None:
+        """Toggle isFavourite only - deliberately separate from update() so this never touches
+        (or risks overwriting with stale data) quantity/costBasis, which change independently
+        via the transaction-recording flow."""
+        now = datetime.now(timezone.utc)
+        with get_cursor(conn) as cur:
+            cur.execute(
+                f'UPDATE {TABLE} SET is_favourite = %s, last_updated = %s WHERE id = %s',
+                (is_favourite, now, item_id),
+            )

@@ -110,3 +110,20 @@ def test_delete_executes_delete_statement(mock_get_cursor):
     PortfolioItemRepository.delete('abc-123')
     assert cursor.execute.call_count == 1
     assert 'DELETE' in cursor.execute.call_args[0][0]
+
+
+@patch('repository.portfolio_item_repository.get_cursor')
+def test_set_favourite_executes_update_statement_with_only_favourite_and_timestamp(mock_get_cursor):
+    cursor = MagicMock()
+    _mock_cursor(mock_get_cursor, cursor)
+
+    PortfolioItemRepository.set_favourite('abc-123', True)
+
+    assert cursor.execute.call_count == 1
+    sql, params = cursor.execute.call_args[0]
+    assert 'UPDATE' in sql
+    assert 'is_favourite' in sql
+    # deliberately doesn't touch quantity/cost_basis - only isFavourite + lastUpdated + the id
+    assert 'quantity' not in sql
+    assert 'cost_basis' not in sql
+    assert params == (True, params[1], 'abc-123')
