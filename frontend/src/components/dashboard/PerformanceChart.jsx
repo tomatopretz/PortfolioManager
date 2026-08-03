@@ -67,8 +67,8 @@ function PerformanceChart({ data, timeRange, onTimeRangeChange }) {
           Portfolio Performance
         </h3>
         <TimeRangeFilter
-          currentRange={timeRange}
-          onChange={onTimeRangeChange}
+          timeRange={timeRange}
+          onTimeRangeChange={onTimeRangeChange}
         />
       </div>
       <ResponsiveContainer width="100%" height={300}>

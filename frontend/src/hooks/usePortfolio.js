@@ -1,15 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { getPortfolioItems, getPerformance, buyAsset, sellAsset } from '../services'
 
 export const usePortfolio = () => {
   const [items, setItems] = useState([])
   const [performance, setPerformance] = useState([])
-  const [loading, setLoading] = useState(false)
+  const [itemsLoading, setItemsLoading] = useState(false)
+  const [performanceLoading, setPerformanceLoading] = useState(false)
   const [error, setError] = useState(null)
   const [timeRange, setTimeRange] = useState('all')
+  const performanceRequestId = useRef(0)
 
   const fetchItems = async () => {
-    setLoading(true)
+    setItemsLoading(true)
     setError(null)
     try {
       const data = await getPortfolioItems()
@@ -17,26 +19,28 @@ export const usePortfolio = () => {
     } catch (err) {
       setError(err.message)
     } finally {
-      setLoading(false)
+      setItemsLoading(false)
     }
   }
 
   const fetchPerformance = async (range = 'all') => {
-    setLoading(true)
+    const requestId = ++performanceRequestId.current
+    setPerformanceLoading(true)
     setError(null)
     try {
       const data = await getPerformance(range)
+      if (requestId !== performanceRequestId.current) return
       setPerformance(data)
     } catch (err) {
+      if (requestId !== performanceRequestId.current) return
       setError(err.message)
     } finally {
-      setLoading(false)
+      if (requestId === performanceRequestId.current) setPerformanceLoading(false)
     }
   }
 
   useEffect(() => {
     fetchItems()
-    fetchPerformance(timeRange)
   }, [])
 
   useEffect(() => {
@@ -44,7 +48,7 @@ export const usePortfolio = () => {
   }, [timeRange])
 
   const handleBuy = async (payload) => {
-    setLoading(true)
+    setItemsLoading(true)
     setError(null)
     try {
       await buyAsset(payload)
@@ -54,12 +58,12 @@ export const usePortfolio = () => {
       setError(err.message)
       return { success: false, error: err.message }
     } finally {
-      setLoading(false)
+      setItemsLoading(false)
     }
   }
 
   const handleSell = async (payload) => {
-    setLoading(true)
+    setItemsLoading(true)
     setError(null)
     try {
       await sellAsset(payload)
@@ -69,7 +73,7 @@ export const usePortfolio = () => {
       setError(err.message)
       return { success: false, error: err.message }
     } finally {
-      setLoading(false)
+      setItemsLoading(false)
     }
   }
 
@@ -102,7 +106,9 @@ export const usePortfolio = () => {
   return {
     items,
     performance,
-    loading,
+    loading: itemsLoading || performanceLoading,
+    itemsLoading,
+    performanceLoading,
     error,
     timeRange,
     setTimeRange,
