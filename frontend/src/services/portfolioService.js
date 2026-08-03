@@ -3,15 +3,22 @@ import { get, post } from './api';
 // also expect gainLoss/gainLossPercent (as the mock service produces), so derive those here.
 // CASH has no price concept on the backend (currentPrice/marketValue are null) - it's worth
 // exactly its quantity in dollars, so it's priced at par instead of being dropped from totals.
+const normalizeAssetType = (value) => (typeof value === 'string' ? value.toLowerCase() : '');
+const isCashItem = (item) => {
+  if (!item) return false;
+  return normalizeAssetType(item.assetType) === 'cash';
+};
+
 const enrichItem = (item) => {
-  const isCash = item.assetType === 'cash';
+  const isCash = isCashItem(item);
   const currentPrice = isCash ? 1 : item.currentPrice ?? 0;
-  const marketValue = isCash ? item.quantity : item.marketValue ?? 0;
+  const marketValue = isCash ? Number(item.quantity ?? 0) : (item.marketValue ?? 0);
   const gainLoss = isCash ? 0 : item.unrealizedPnL ?? (marketValue - item.costBasis);
   const gainLossPercent = item.costBasis > 0 ? (gainLoss / (item.costBasis)) * 100 : 0;
 
   return {
     ...item,
+    assetType: normalizeAssetType(item.assetType) || item.assetType,
     currentPrice,
     marketValue,
     gainLoss,
@@ -25,8 +32,8 @@ export const getPortfolioItems = async () => {
 };
 
 export const getPerformance = async (range = 'all') => {
-  const response = await get(`/api/portfolio/performance?range=${range}`);
-  return response.data || [];
+  const response = await get(`/api/performance?range=${range}`);
+  return response?.ranges ? response.ranges[range.toUpperCase()] || [] : (response.data || []);
 };
 
 export const getCurrentPrices = async (tickers) => {
@@ -39,12 +46,12 @@ export const getCurrentPrices = async (tickers) => {
 };
 
 export const buyAsset = async (payload) => {
-  const response = await post('/api/portfolio/add-asset', payload);
+  const response = await post('/api/portfolio', payload);
   return response;
 };
 
 export const sellAsset = async (payload) => {
-  const response = await post('/api/portfolio/remove-asset', payload);
+  const response = await post('/api/portfolio', payload);
   return response;
 };
 

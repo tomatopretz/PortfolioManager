@@ -2,7 +2,11 @@ import { Link } from 'react-router-dom'
 
 function HoldingsPreview({ items }) {
   const holdings = items
-    .filter((item) => item.assetType !== 'cash')
+    .filter((item) => {
+      const assetType = String(item.assetType || '').toLowerCase()
+      const ticker = String(item.ticker || '').toUpperCase()
+      return assetType !== 'cash' && Number(item.marketValue ?? 0) > 0
+    })
     .sort((a, b) => b.marketValue - a.marketValue)
 
   if (holdings.length === 0) {
