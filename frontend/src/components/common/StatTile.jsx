@@ -1,10 +1,11 @@
 import Card from './Card'
-import { formatCurrency, formatPercent } from '../../utils/format'
+import { formatCurrency, formatPercent, formatQuantity } from '../../utils/format'
 import { toneClass } from '../../utils/portfolio'
 
 const FORMATTERS = {
   currency: (value) => formatCurrency(value, 0),
   percent: (value) => formatPercent(value),
+  count: (value) => formatQuantity(value, 0),
   text: (value) => value,
 }
 

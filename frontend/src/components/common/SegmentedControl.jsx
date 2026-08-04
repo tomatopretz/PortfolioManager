@@ -7,7 +7,7 @@ function SegmentedControl({ options, value, onChange, ariaLabel }) {
     <div
       role="group"
       aria-label={ariaLabel}
-      className="flex w-fit gap-2 rounded-lg bg-[var(--surface-2)] p-1"
+      className="flex w-fit flex-wrap gap-2 rounded-lg bg-[var(--surface-2)] p-1"
     >
       {options.map((option) => {
         const isActive = option.value === value

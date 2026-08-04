@@ -17,6 +17,9 @@ import { isCashItem, sumBy } from '../utils/portfolio'
 export const usePortfolio = () => {
   const [timeRange, setTimeRange] = useState(DEFAULT_TIME_RANGE)
   const [actionError, setActionError] = useState(null)
+  // Bumped after every successful trade. Views that own data this hook doesn't manage
+  // (transaction history) depend on it to know their copy is stale.
+  const [dataVersion, setDataVersion] = useState(0)
 
   const itemsResource = useAsyncResource(getPortfolioItems, [])
   const performanceResource = useAsyncResource(getPerformance, [])
@@ -44,6 +47,7 @@ export const usePortfolio = () => {
       try {
         await request(payload)
         await refreshAll()
+        setDataVersion((version) => version + 1)
         return { success: true }
       } catch (err) {
         setActionError(err.message)
@@ -118,6 +122,7 @@ export const usePortfolio = () => {
     error: actionError ?? itemsResource.error ?? performanceResource.error,
     timeRange,
     setTimeRange,
+    dataVersion,
     buyAsset,
     sellAsset,
     toggleFavourite,
