@@ -17,66 +17,84 @@ def client():
         yield client
 
 
-@patch('routes.prices.price_service.list_current_prices')
+@patch('routes.prices.price_service.list_current_prices')  # mock: replace price_service so no real yfinance call runs
 def test_list_current_prices_returns_prices_for_tickers(mock_list_current_prices, client):
+    # Given the service resolves both tickers
     mock_list_current_prices.return_value = {'AAPL': 105.5, 'GOOG': 250.25}
+    # When calling GET /api/prices?tickers=aapl,goog
     response = client.get('/api/prices?tickers=aapl,goog')
+    # Then the route returns 200 with both prices, uppercased, and no unresolved tickers
     assert response.status_code == 200
     assert response.json == {'prices': {'AAPL': 105.5, 'GOOG': 250.25}, 'not_found': []}
     mock_list_current_prices.assert_called_once_with(['AAPL', 'GOOG'])
 
 
-@patch('routes.prices.price_service.list_current_prices')
+@patch('routes.prices.price_service.list_current_prices')  # mock: replace price_service so no real yfinance call runs
 def test_list_current_prices_lists_unresolved_tickers(mock_list_current_prices, client):
+    # Given the service only resolves one of the two requested tickers
     mock_list_current_prices.return_value = {'AAPL': 105.5}
+    # When/Then calling GET /api/prices?tickers=AAPL,BADTICKER lists the unresolved one separately
     response = client.get('/api/prices?tickers=AAPL,BADTICKER')
     assert response.status_code == 200
     assert response.json == {'prices': {'AAPL': 105.5}, 'not_found': ['BADTICKER']}
 
 
-@patch('routes.prices.price_service.list_current_prices')
+@patch('routes.prices.price_service.list_current_prices')  # mock: replace price_service so no real yfinance call runs
 def test_list_current_prices_returns_404_when_none_resolve(mock_list_current_prices, client):
+    # Given the service resolves none of the requested tickers
     mock_list_current_prices.return_value = {}
+    # When/Then calling GET /api/prices?tickers=BADTICKER returns 404
     response = client.get('/api/prices?tickers=BADTICKER')
     assert response.status_code == 404
 
 
 def test_list_current_prices_requires_tickers_param(client):
+    # When/Then calling GET /api/prices with no ?tickers= param is rejected
     response = client.get('/api/prices')
     assert response.status_code == 422
 
 
-@patch('routes.prices.price_service.list_current_prices')
+@patch('routes.prices.price_service.list_current_prices')  # mock: replace price_service so no real yfinance call runs
 def test_list_current_prices_returns_502_on_failure(mock_list_current_prices, client):
+    # Given the service raises an error (e.g. yfinance unreachable)
     mock_list_current_prices.side_effect = ConnectionError('Failed to connect to Yahoo Finance')
+    # When/Then calling GET /api/prices translates the error into a 502 response
     response = client.get('/api/prices?tickers=AAPL')
     assert response.status_code == 502
 
 
-@patch('routes.prices.price_service.get_current_price')
+@patch('routes.prices.price_service.get_current_price')  # mock: replace price_service so no real yfinance call runs
 def test_get_ticker_price_returns_current_price_when_no_date(mock_get_current_price, client):
+    # Given the service resolves a current price for AAPL
     mock_get_current_price.return_value = 105.5
+    # When calling GET /api/prices/AAPL (no ?date=)
     response = client.get('/api/prices/AAPL')
+    # Then the route returns 200 with that price and date=null
     assert response.status_code == 200
     assert response.json == {'ticker': 'AAPL', 'date': None, 'price': 105.5}
     mock_get_current_price.assert_called_once_with('AAPL')
 
 
-@patch('routes.prices.price_service.get_current_price')
+@patch('routes.prices.price_service.get_current_price')  # mock: replace price_service so no real yfinance call runs
 def test_get_ticker_price_returns_404_when_current_price_not_found(mock_get_current_price, client):
+    # Given the service can't find a price for this ticker
     mock_get_current_price.side_effect = PriceNotFoundError("No price data found for 'BADTICKER'")
+    # When/Then calling GET /api/prices/BADTICKER returns 404
     response = client.get('/api/prices/BADTICKER')
     assert response.status_code == 404
 
 
-@patch('routes.prices.price_service.get_current_price')
+@patch('routes.prices.price_service.get_current_price')  # mock: replace price_service so no real yfinance call runs
 def test_get_ticker_price_returns_502_when_current_price_lookup_fails(mock_get_current_price, client):
+    # Given the service raises an unexpected error
     mock_get_current_price.side_effect = ConnectionError('Failed to connect to Yahoo Finance')
+    # When/Then calling GET /api/prices/AAPL translates the error into a 502 response
     response = client.get('/api/prices/AAPL')
     assert response.status_code == 502
 
 
 def test_get_price_on_date_rejects_invalid_date_format(client):
+    # When/Then a malformed ?date= value is rejected before it reaches the service
     response = client.get('/api/prices/AAPL?date=not-a-date')
     assert response.status_code == 422
 
@@ -84,27 +102,34 @@ def test_get_price_on_date_rejects_invalid_date_format(client):
 def test_get_price_on_date_rejects_unix_timestamp_style_input(client):
     # strptime requires the exact YYYY-MM-DD shape, so a bare number like this is
     # rejected outright rather than silently reinterpreted as some other date
+    # When/Then a bare-number ?date= value is rejected before it reaches the service
     response = client.get('/api/prices/AAPL?date=201111')
     assert response.status_code == 422
 
 
-@patch('routes.prices.price_service.get_price_on_date')
+@patch('routes.prices.price_service.get_price_on_date')  # mock: replace price_service so no real yfinance call runs
 def test_get_price_on_date_returns_price(mock_get_price_on_date, client):
+    # Given the service resolves a price for that historical date
     mock_get_price_on_date.return_value = 99.0
+    # When/Then calling GET /api/prices/AAPL?date=2026-07-20 returns that price
     response = client.get('/api/prices/AAPL?date=2026-07-20')
     assert response.status_code == 200
     assert response.json == {'ticker': 'AAPL', 'date': '2026-07-20', 'price': 99.0}
 
 
-@patch('routes.prices.price_service.get_price_on_date')
+@patch('routes.prices.price_service.get_price_on_date')  # mock: replace price_service so no real yfinance call runs
 def test_get_price_on_date_returns_404_when_not_found(mock_get_price_on_date, client):
+    # Given the service can't find a price for that ticker/date
     mock_get_price_on_date.side_effect = PriceNotFoundError("No price data found for 'AAPL' on 2026-07-20")
+    # When/Then calling GET /api/prices/AAPL?date=2026-07-20 returns 404
     response = client.get('/api/prices/AAPL?date=2026-07-20')
     assert response.status_code == 404
 
 
-@patch('routes.prices.price_service.get_price_on_date')
+@patch('routes.prices.price_service.get_price_on_date')  # mock: replace price_service so no real yfinance call runs
 def test_get_price_on_date_returns_502_on_unexpected_error(mock_get_price_on_date, client):
+    # Given the service raises an unexpected error
     mock_get_price_on_date.side_effect = ConnectionError('Failed to connect to Yahoo Finance')
+    # When/Then calling GET /api/prices/AAPL?date=2026-07-20 translates the error into a 502 response
     response = client.get('/api/prices/AAPL?date=2026-07-20')
     assert response.status_code == 502

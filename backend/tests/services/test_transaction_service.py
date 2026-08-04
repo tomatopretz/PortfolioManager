@@ -62,67 +62,82 @@ def _fake_transaction():
 
 @pytest.fixture(autouse=True)
 def _mock_get_transaction():
+    # mock: applied to every test in this file - replaces the real DB transaction context manager
+    # with a fake one, so record_transaction() never touches an actual connection
     with patch('services.transaction_service.get_transaction', side_effect=_fake_transaction):
         yield
 
 
 # --- list_transactions --------------------------------------------------------------------
 
-@patch('services.transaction_service.TransactionRepository.list_all')
+@patch('services.transaction_service.TransactionRepository.list_all')  # mock: replace the repository so no real DB call runs
 def test_list_transactions_returns_all_when_no_tickers_given(mock_list_all):
+    # Given the repository returns one transaction
     mock_list_all.return_value = ['txn']
+    # When/Then listing with no ticker filter delegates to list_all()
     assert TransactionService.list_transactions() == ['txn']
     mock_list_all.assert_called_once()
 
 
-@patch('services.transaction_service.TransactionRepository.list_by_tickers')
+@patch('services.transaction_service.TransactionRepository.list_by_tickers')  # mock: replace the repository so no real DB call runs
 def test_list_transactions_filters_by_tickers(mock_list_by_tickers):
+    # Given the repository returns one transaction
     mock_list_by_tickers.return_value = ['txn']
+    # When/Then listing with a ticker filter delegates to list_by_tickers()
     assert TransactionService.list_transactions(['AAPL']) == ['txn']
     mock_list_by_tickers.assert_called_once_with(['AAPL'])
 
 
 # --- record_transaction: date handling ---------------------------------------------------------
 
-@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)
-@patch('services.transaction_service.PortfolioItemRepository.update')
-@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')
+@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
 def test_record_transaction_uses_client_supplied_date_when_given(mock_get_item, mock_update_item, mock_add_txn):
+    # Given an existing CASH item and a client-supplied backdated date
     mock_get_item.return_value = _cash_item(quantity=1000, cost_basis=1000)
     backdated = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
+    # When recording a withdrawal with that date
     request = _request(type='sell', ticker='usd', assetType='cash', quantity=100, price=None, date=backdated)
     result = TransactionService.record_transaction(request)
 
+    # Then the recorded transaction keeps the client-supplied date, not now()
     assert result.date == backdated
 
 
-@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)
-@patch('services.transaction_service.PortfolioItemRepository.update')
-@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')
+@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
 def test_record_transaction_defaults_date_to_now_when_omitted(mock_get_item, mock_update_item, mock_add_txn):
+    # Given an existing CASH item and no date on the request
     mock_get_item.return_value = _cash_item(quantity=1000, cost_basis=1000)
     before = datetime.now(timezone.utc)
 
+    # When recording a withdrawal with no date
     request = _request(type='sell', ticker='usd', assetType='cash', quantity=100, price=None)
     result = TransactionService.record_transaction(request)
 
+    # Then the recorded transaction's date defaults to "now", bounded by before/after this call
     after = datetime.now(timezone.utc)
     assert before <= result.date <= after
 
 
 # --- record_transaction: ADD flow (type='buy') ----------------------------------------------
 
-@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)
-@patch('services.transaction_service.PortfolioItemRepository.update')
-@patch('services.transaction_service.PortfolioItemRepository.add', side_effect=_fake_repo_add)
-@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')
+@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
 def test_deposit_cash_creates_cash_item_on_first_deposit(mock_get_item, mock_add_item, mock_update_item, mock_add_txn):
+    # Given no CASH item exists yet
     mock_get_item.return_value = None  # no CASH item exists yet
 
+    # When depositing cash for the first time
     request = _request(type='buy', ticker='usd', assetType='cash', quantity=500, price=None, useCash=False)
     result = TransactionService.record_transaction(request)
 
+    # Then a new CASH item is created and immediately updated with the deposited balance
     added_item = mock_add_item.call_args[0][0]
     assert added_item.ticker == CASH_TICKER
     assert added_item.assetType == CASH_ASSET_TYPE
@@ -131,22 +146,26 @@ def test_deposit_cash_creates_cash_item_on_first_deposit(mock_get_item, mock_add
     assert updated_item.quantity == 500
     assert updated_item.costBasis == 500  # cash costBasis mirrors quantity 1:1
 
+    # And the recorded transaction reflects a direct deposit (useCash=False)
     assert result.type == 'buy'
     assert result.quantity == 500
     assert result.price == 1
     assert result.useCash is False
 
 
-@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)
-@patch('services.transaction_service.PortfolioItemRepository.update')
-@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')
+@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
 def test_deposit_cash_updates_existing_cash_item(mock_get_item, mock_update_item, mock_add_txn):
+    # Given an existing CASH item with a balance
     existing_cash = _cash_item(quantity=1000, cost_basis=1000)
     mock_get_item.return_value = existing_cash
 
+    # When depositing more cash
     request = _request(type='buy', ticker='usd', assetType='cash', quantity=250, price=None, useCash=False)
     result = TransactionService.record_transaction(request)
 
+    # Then the existing item's balance is incremented, not replaced
     updated_item = mock_update_item.call_args[0][0]
     assert updated_item.quantity == 1250
     assert updated_item.costBasis == 1250
@@ -156,18 +175,21 @@ def test_deposit_cash_updates_existing_cash_item(mock_get_item, mock_update_item
     assert result.portfolioItemId == existing_cash.id
 
 
-@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)
-@patch('services.transaction_service.PortfolioItemRepository.update')
-@patch('services.transaction_service.PortfolioItemRepository.add', side_effect=_fake_repo_add)
-@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')
+@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
 def test_buy_asset_without_cash_creates_new_item_and_skips_cash_check(
     mock_get_item, mock_add_item, mock_update_item, mock_add_txn,
 ):
+    # Given the stock doesn't exist in the portfolio yet
     mock_get_item.return_value = None  # AAPL doesn't exist yet
 
+    # When buying it with useCash=False (funded externally, not from the CASH balance)
     request = _request(type='buy', ticker='aapl', assetType='stock', quantity=10, price=150, useCash=False)
     result = TransactionService.record_transaction(request)
 
+    # Then the CASH balance is never even looked up, and a new stock item is created
     assert mock_get_item.call_count == 1  # only the stock lookup - cash is never checked
     assert mock_get_item.call_args[0] == ('AAPL', 'STOCK')
 
@@ -181,31 +203,37 @@ def test_buy_asset_without_cash_creates_new_item_and_skips_cash_check(
     assert result.useCash is False
 
 
-@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)
-@patch('services.transaction_service.PortfolioItemRepository.update')
-@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')
+@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
 def test_buy_asset_existing_item_accumulates_quantity_and_cost_basis(mock_get_item, mock_update_item, mock_add_txn):
+    # Given an existing AAPL holding
     mock_get_item.return_value = _item('AAPL', quantity=5, cost_basis=500, asset_type='STOCK')
 
+    # When buying more of it
     request = _request(type='buy', ticker='aapl', assetType='stock', quantity=5, price=120, useCash=False)
     TransactionService.record_transaction(request)
 
+    # Then quantity and cost basis both accumulate onto the existing item
     updated_item = mock_update_item.call_args[0][0]
     assert updated_item.quantity == 10
     assert updated_item.costBasis == 500 + 600  # existing 500 + (5 * 120)
 
 
-@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)
-@patch('services.transaction_service.PortfolioItemRepository.update')
-@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')
+@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
 def test_buy_asset_with_cash_deducts_balance_and_records_both_transactions(mock_get_item, mock_update_item, mock_add_txn):
+    # Given a CASH balance and an existing AAPL holding
     cash = _cash_item(quantity=2000, cost_basis=2000)
     stock = _item('AAPL', quantity=5, cost_basis=500, asset_type='STOCK')
     mock_get_item.side_effect = _lookup_by_asset_type(cash_item=cash, stock_item=stock)
 
+    # When buying more AAPL funded from the CASH balance (useCash=True)
     request = _request(type='buy', ticker='aapl', assetType='stock', quantity=10, price=150, useCash=True)
     result = TransactionService.record_transaction(request)
 
+    # Then both the CASH balance (deducted) and the stock item (accumulated) are updated
     assert mock_update_item.call_count == 2  # cash deduction + stock accumulation
     updated_cash, updated_stock = (call[0][0] for call in mock_update_item.call_args_list)
     assert updated_cash.quantity == 2000 - 1500  # 10 * 150
@@ -213,6 +241,8 @@ def test_buy_asset_with_cash_deducts_balance_and_records_both_transactions(mock_
     assert updated_stock.quantity == 5 + 10
     assert updated_stock.costBasis == 500 + 1500
 
+    # And two transactions are recorded: the cash-side debit (useCash=True - caused by this
+    # trade) plus the stock buy itself
     assert mock_add_txn.call_count == 2  # cash-side debit + the stock buy itself
     cash_txn, stock_txn = (call[0][0] for call in mock_add_txn.call_args_list)
     assert cash_txn.type == 'sell'
@@ -227,11 +257,13 @@ def test_buy_asset_with_cash_deducts_balance_and_records_both_transactions(mock_
     assert result is stock_txn  # record_transaction returns the primary (stock) transaction
 
 
-@patch('services.transaction_service.PortfolioItemRepository.update')
-@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')
+@patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
 def test_buy_asset_with_insufficient_cash_raises(mock_get_item, mock_update_item):
+    # Given a CASH balance too small to cover the purchase
     mock_get_item.return_value = _cash_item(quantity=100, cost_basis=100)  # not enough for 10*150
 
+    # When/Then buying with useCash=True raises before touching any row
     request = _request(type='buy', ticker='aapl', assetType='stock', quantity=10, price=150, useCash=True)
     with pytest.raises(InsufficientCashError):
         TransactionService.record_transaction(request)
@@ -241,15 +273,18 @@ def test_buy_asset_with_insufficient_cash_raises(mock_get_item, mock_update_item
 
 # --- record_transaction: REMOVE flow (type='sell') ------------------------------------------
 
-@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)
-@patch('services.transaction_service.PortfolioItemRepository.update')
-@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')
+@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
 def test_withdraw_cash_success(mock_get_item, mock_update_item, mock_add_txn):
+    # Given an existing CASH balance
     mock_get_item.return_value = _cash_item(quantity=1000, cost_basis=1000)
 
+    # When withdrawing part of it
     request = _request(type='sell', ticker='usd', assetType='cash', quantity=300, price=None)
     result = TransactionService.record_transaction(request)
 
+    # Then the balance is reduced and a matching sell transaction is recorded
     updated_item = mock_update_item.call_args[0][0]
     assert updated_item.quantity == 700
     assert updated_item.costBasis == 700
@@ -259,50 +294,61 @@ def test_withdraw_cash_success(mock_get_item, mock_update_item, mock_add_txn):
     assert result.price == 1
 
 
-@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')
+@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
 def test_withdraw_cash_insufficient_raises(mock_get_item):
+    # Given a CASH balance smaller than the requested withdrawal
     mock_get_item.return_value = _cash_item(quantity=50, cost_basis=50)
 
+    # When/Then withdrawing more than the balance raises
     request = _request(type='sell', ticker='usd', assetType='cash', quantity=100, price=None)
     with pytest.raises(InsufficientCashError):
         TransactionService.record_transaction(request)
 
 
-@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')
+@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
 def test_sell_asset_not_found_raises(mock_get_item):
+    # Given the ticker doesn't exist in the portfolio at all
     mock_get_item.return_value = None  # AAPL doesn't exist
 
+    # When/Then selling it raises instead of creating a negative holding
     request = _request(type='sell', ticker='aapl', assetType='stock', quantity=5, price=150)
     with pytest.raises(PortfolioItemNotFoundError):
         TransactionService.record_transaction(request)
 
 
-@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')
+@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
 def test_sell_asset_insufficient_quantity_raises(mock_get_item):
+    # Given fewer shares held than requested
     mock_get_item.return_value = _item('AAPL', quantity=3, cost_basis=300, asset_type='STOCK')
 
+    # When/Then selling more than is held raises
     request = _request(type='sell', ticker='aapl', assetType='stock', quantity=5, price=150)
     with pytest.raises(InsufficientQuantityError):
         TransactionService.record_transaction(request)
 
 
-@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)
-@patch('services.transaction_service.PortfolioItemRepository.update')
-@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')
+@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
 def test_sell_asset_credits_cash_and_reduces_cost_basis_proportionally(mock_get_item, mock_update_item, mock_add_txn):
+    # Given a $100/share average AAPL holding and an existing CASH balance
     stock = _item('AAPL', quantity=10, cost_basis=1000, asset_type='STOCK')  # $100/share average
     cash = _cash_item(quantity=500, cost_basis=500)
     mock_get_item.side_effect = _lookup_by_asset_type(cash_item=cash, stock_item=stock)
 
+    # When selling part of the holding at a different price than the average cost
     request = _request(type='sell', ticker='aapl', assetType='stock', quantity=4, price=120)
     result = TransactionService.record_transaction(request)
 
+    # Then proceeds credit CASH, and the stock's cost basis shrinks proportionally to shares sold
     updated_cash, updated_stock = (call[0][0] for call in mock_update_item.call_args_list)
     assert updated_cash.quantity == 500 + 480  # proceeds = 4 * 120
     assert updated_cash.costBasis == 500 + 480
     assert updated_stock.quantity == 6
     assert updated_stock.costBasis == 600  # $100/share average carried over 6 remaining shares
 
+    # And two transactions are recorded: the cash-side credit (useCash=True - caused by this
+    # trade) plus the stock sell itself
     cash_txn, stock_txn = (call[0][0] for call in mock_add_txn.call_args_list)
     assert cash_txn.type == 'buy'
     assert cash_txn.quantity == 480
@@ -316,23 +362,22 @@ def test_sell_asset_credits_cash_and_reduces_cost_basis_proportionally(mock_get_
     assert result is stock_txn
 
 
-@patch('services.transaction_service.PortfolioItemRepository.delete')
-@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)
-@patch('services.transaction_service.PortfolioItemRepository.update')
-@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')
-def test_sell_asset_to_zero_quantity_keeps_item_instead_of_deleting(
-    mock_get_item, mock_update_item, mock_add_txn, mock_delete_item,
-):
-    # transaction.portfolio_item_id is ON DELETE CASCADE, so deleting the item here would wipe
+@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
+def test_sell_asset_to_zero_quantity_keeps_item_instead_of_deleting(mock_get_item, mock_update_item, mock_add_txn):
+    # transaction.portfolio_item_id is ON DELETE CASCADE, so removing the item here would wipe
     # every transaction ever recorded against it - the item must be kept at quantity 0 instead
+    # Given a holding of exactly 5 shares
     stock = _item('AAPL', quantity=5, cost_basis=500, asset_type='STOCK')
     cash = _cash_item()
     mock_get_item.side_effect = _lookup_by_asset_type(cash_item=cash, stock_item=stock)
 
+    # When selling all 5 shares
     request = _request(type='sell', ticker='aapl', assetType='stock', quantity=5, price=150)
     TransactionService.record_transaction(request)
 
+    # Then the item is updated to quantity 0 rather than removed
     _, updated_stock = (call[0][0] for call in mock_update_item.call_args_list)
     assert updated_stock.quantity == 0
     assert updated_stock.costBasis == 0
-    mock_delete_item.assert_not_called()

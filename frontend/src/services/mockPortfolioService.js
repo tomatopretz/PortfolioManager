@@ -171,6 +171,11 @@ export const sellAsset = async (payload) => {
   return { success: true, transaction };
 };
 
+export const getTransactions = async () => {
+  await simulateLatency();
+  return mockData.transactions;
+};
+
 export const toggleFavourite = async (ticker, assetType) => {
   await simulateLatency();
 
@@ -196,5 +201,6 @@ export default {
   getCurrentPrices,
   buyAsset,
   sellAsset,
+  getTransactions,
   toggleFavourite,
 };
