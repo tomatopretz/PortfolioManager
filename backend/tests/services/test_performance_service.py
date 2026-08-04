@@ -39,7 +39,7 @@ def _txn(item_id, txn_type, quantity, price, txn_date):
 @patch('services.performance_service._now')
 @patch('services.performance_service.price_service.get_intraday_price_history')
 @patch('services.performance_service.price_service.get_daily_price_history')
-@patch('services.performance_service.PortfolioItemService.list_portfolio_items')
+@patch('services.performance_service.PortfolioService.list_portfolio_items')
 @patch('services.performance_service.TransactionService.list_transactions')
 @patch('services.performance_service._today')
 def test_get_performance_reconstructs_buy_sell_mixed_history_with_cash(
@@ -51,7 +51,12 @@ def test_get_performance_reconstructs_buy_sell_mixed_history_with_cash(
     mock_now,
 ):
     mock_today.return_value = date(2026, 7, 31)
-    mock_list_items.return_value = [_item(AAPL_ID, 'AAPL'), _item(MSFT_ID, 'MSFT'), _item(CASH_ID, 'USD')]
+    mock_now.return_value = datetime(2026, 7, 31, 9, 35)
+    mock_list_items.return_value = [
+        _item(AAPL_ID, 'AAPL', quantity=6),  # 10 bought - 4 sold
+        _item(MSFT_ID, 'MSFT', quantity=2),
+        _item(CASH_ID, 'USD', quantity=440),
+    ]
     mock_list_transactions.return_value = [
         _txn(AAPL_ID, 'buy', 10, 100, datetime(2026, 7, 28, 10)),
         _txn(AAPL_ID, 'sell', 4, 110, datetime(2026, 7, 29, 10)),
@@ -103,7 +108,7 @@ def test_get_performance_reconstructs_buy_sell_mixed_history_with_cash(
 @patch('services.performance_service._now')
 @patch('services.performance_service.price_service.get_intraday_price_history')
 @patch('services.performance_service.price_service.get_daily_price_history')
-@patch('services.performance_service.PortfolioItemService.list_portfolio_items')
+@patch('services.performance_service.PortfolioService.list_portfolio_items')
 @patch('services.performance_service.TransactionService.list_transactions')
 @patch('services.performance_service._today')
 def test_get_performance_1d_holds_price_flat_while_market_closed_but_still_counts_new_buys(
@@ -151,7 +156,7 @@ def test_get_performance_1d_holds_price_flat_while_market_closed_but_still_count
 @patch('services.performance_service._now')
 @patch('services.performance_service.price_service.get_intraday_price_history')
 @patch('services.performance_service.price_service.get_daily_price_history')
-@patch('services.performance_service.PortfolioItemService.list_portfolio_items')
+@patch('services.performance_service.PortfolioService.list_portfolio_items')
 @patch('services.performance_service.TransactionService.list_transactions')
 @patch('services.performance_service._today')
 def test_get_performance_1d_handles_timezone_aware_intraday_timestamps(
@@ -190,7 +195,7 @@ def test_get_performance_1d_handles_timezone_aware_intraday_timestamps(
 
 @patch('services.performance_service.price_service.get_intraday_price_history')
 @patch('services.performance_service.price_service.get_daily_price_history')
-@patch('services.performance_service.PortfolioItemService.list_portfolio_items')
+@patch('services.performance_service.PortfolioService.list_portfolio_items')
 @patch('services.performance_service.TransactionService.list_transactions')
 @patch('services.performance_service._today')
 def test_get_performance_uses_previous_close_for_non_trading_days(
@@ -216,7 +221,7 @@ def test_get_performance_uses_previous_close_for_non_trading_days(
 
 @patch('services.performance_service.price_service.get_intraday_price_history')
 @patch('services.performance_service.price_service.get_daily_price_history')
-@patch('services.performance_service.PortfolioItemService.list_portfolio_items')
+@patch('services.performance_service.PortfolioService.list_portfolio_items')
 @patch('services.performance_service.TransactionService.list_transactions')
 @patch('services.performance_service._today')
 def test_get_performance_handles_cash_only_history(
@@ -227,7 +232,7 @@ def test_get_performance_handles_cash_only_history(
     mock_intraday_prices,
 ):
     mock_today.return_value = date(2026, 7, 31)
-    mock_list_items.return_value = [_item(CASH_ID, 'USD')]
+    mock_list_items.return_value = [_item(CASH_ID, 'USD', quantity=750)]  # 1000 deposited - 250 withdrawn
     mock_list_transactions.return_value = [
         _txn(CASH_ID, 'buy', 1000, 1, datetime(2026, 7, 30, 10)),
         _txn(CASH_ID, 'sell', 250, 1, datetime(2026, 7, 31, 10)),
@@ -247,7 +252,7 @@ def test_get_performance_handles_cash_only_history(
 
 @patch('services.performance_service.price_service.get_intraday_price_history')
 @patch('services.performance_service.price_service.get_daily_price_history')
-@patch('services.performance_service.PortfolioItemService.list_portfolio_items')
+@patch('services.performance_service.PortfolioService.list_portfolio_items')
 @patch('services.performance_service.TransactionService.list_transactions')
 @patch('services.performance_service._today')
 def test_get_performance_treats_usd_as_cash_when_building_history(
@@ -279,7 +284,7 @@ def test_get_performance_treats_usd_as_cash_when_building_history(
 @patch('services.performance_service.price_service.list_current_prices')
 @patch('services.performance_service.price_service.get_intraday_price_history')
 @patch('services.performance_service.price_service.get_daily_price_history')
-@patch('services.performance_service.PortfolioItemService.list_portfolio_items')
+@patch('services.performance_service.PortfolioService.list_portfolio_items')
 @patch('services.performance_service.TransactionService.list_transactions')
 @patch('services.performance_service._today')
 def test_get_performance_values_current_holdings_by_market_price_when_no_transactions(
@@ -307,7 +312,7 @@ def test_get_performance_values_current_holdings_by_market_price_when_no_transac
 
 @patch('services.performance_service.price_service.get_intraday_price_history')
 @patch('services.performance_service.price_service.get_daily_price_history')
-@patch('services.performance_service.PortfolioItemService.list_portfolio_items')
+@patch('services.performance_service.PortfolioService.list_portfolio_items')
 @patch('services.performance_service.TransactionService.list_transactions')
 def test_get_performance_returns_empty_ranges_for_empty_transaction_history(
     mock_list_transactions,

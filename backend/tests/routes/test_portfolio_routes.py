@@ -7,6 +7,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from app import app
+from models.PortfolioItemDTO import PortfolioItemDTO
 from models.PortfolioItemResultDTO import PortfolioItemResultDTO
 
 
@@ -19,7 +20,7 @@ def client():
 
 # --- GET /api/portfolio ------------------------------------------------------------------------
 
-@patch('routes.portfolio.PortfolioService.get_portfolio')
+@patch('routes.portfolio.PortfolioService.get_enriched_portfolio')
 def test_get_portfolio_returns_items(mock_get_portfolio, client):
     mock_get_portfolio.return_value = [
         PortfolioItemResultDTO(
@@ -34,7 +35,7 @@ def test_get_portfolio_returns_items(mock_get_portfolio, client):
     assert item['marketValue'] == 1500
 
 
-@patch('routes.portfolio.PortfolioService.get_portfolio')
+@patch('routes.portfolio.PortfolioService.get_enriched_portfolio')
 def test_get_portfolio_returns_empty_list(mock_get_portfolio, client):
     mock_get_portfolio.return_value = []
     response = client.get('/api/portfolio')
@@ -42,7 +43,7 @@ def test_get_portfolio_returns_empty_list(mock_get_portfolio, client):
     assert response.json == []
 
 
-@patch('routes.portfolio.PortfolioService.get_portfolio')
+@patch('routes.portfolio.PortfolioService.get_enriched_portfolio')
 def test_get_portfolio_returns_502_on_failure(mock_get_portfolio, client):
     mock_get_portfolio.side_effect = ConnectionError('DB unreachable')
     response = client.get('/api/portfolio')
@@ -67,7 +68,7 @@ def _result_item(**overrides):
     return PortfolioItemResultDTO(**defaults)
 
 
-@patch('routes.portfolio.PortfolioService.get_portfolio_item')
+@patch('routes.portfolio.PortfolioService.get_enriched_portfolio_item')
 def test_get_portfolio_item_returns_item(mock_get_portfolio_item, client):
     mock_get_portfolio_item.return_value = _result_item()
     response = client.get('/api/portfolio/AAPL/STOCK')
@@ -76,7 +77,7 @@ def test_get_portfolio_item_returns_item(mock_get_portfolio_item, client):
     mock_get_portfolio_item.assert_called_once_with('AAPL', 'STOCK')
 
 
-@patch('routes.portfolio.PortfolioService.get_portfolio_item')
+@patch('routes.portfolio.PortfolioService.get_enriched_portfolio_item')
 def test_get_portfolio_item_returns_404_when_not_found(mock_get_portfolio_item, client):
     mock_get_portfolio_item.return_value = None
     response = client.get('/api/portfolio/AAPL/STOCK')
@@ -84,7 +85,7 @@ def test_get_portfolio_item_returns_404_when_not_found(mock_get_portfolio_item, 
     assert 'AAPL' in response.json['error']
 
 
-@patch('routes.portfolio.PortfolioService.get_portfolio_item')
+@patch('routes.portfolio.PortfolioService.get_enriched_portfolio_item')
 def test_get_portfolio_item_returns_502_on_failure(mock_get_portfolio_item, client):
     mock_get_portfolio_item.side_effect = ConnectionError('DB unreachable')
     response = client.get('/api/portfolio/AAPL/STOCK')
@@ -92,10 +93,18 @@ def test_get_portfolio_item_returns_502_on_failure(mock_get_portfolio_item, clie
 
 
 # --- PATCH /api/portfolio/<ticker>/<assetType>/favourite -----------------------------------------
+# No price enrichment for a boolean flag toggle, so the response is a plain PortfolioItemDTO,
+# not the enriched PortfolioItemResultDTO.
+
+def _plain_item(**overrides):
+    defaults = dict(id='1', ticker='AAPL', assetType='STOCK', quantity=10, costBasis=1000)
+    defaults.update(overrides)
+    return PortfolioItemDTO(**defaults)
+
 
 @patch('routes.portfolio.PortfolioService.toggle_favourite')
 def test_toggle_favourite_returns_updated_item(mock_toggle_favourite, client):
-    mock_toggle_favourite.return_value = _result_item(isFavourite=True)
+    mock_toggle_favourite.return_value = _plain_item(isFavourite=True)
     response = client.patch('/api/portfolio/AAPL/STOCK/favourite')
     assert response.status_code == 200
     assert response.json['isFavourite'] is True

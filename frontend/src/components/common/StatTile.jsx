@@ -1,14 +1,11 @@
+import { formatCurrency } from '../../utils/format'
+
 function StatTile({ label, value, delta, deltaPercent, format = 'currency' }) {
   const deltaColor = delta >= 0 ? 'text-[var(--status-good)]' : 'text-[var(--status-serious)]'
 
   const formatValue = (val) => {
     if (format === 'currency') {
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      }).format(val)
+      return formatCurrency(val, 0)
     }
     if (format === 'percent') {
       return `${val.toFixed(2)}%`

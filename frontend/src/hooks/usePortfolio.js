@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getPortfolioItems, getPerformance, buyAsset, sellAsset } from '../services'
+import { getPortfolioItems, getPerformance, buyAsset, sellAsset, toggleFavourite } from '../services'
+
+const MAX_FAVOURITES = 10
 
 export const usePortfolio = () => {
   const [items, setItems] = useState([])
@@ -80,6 +82,38 @@ export const usePortfolio = () => {
     }
   }
 
+  const handleToggleFavourite = async (item) => {
+    const isCash = String(item.assetType || '').toLowerCase() === 'cash'
+    if (isCash) {
+      return { success: false, error: 'CASH cannot be favourited' }
+    }
+
+    const isAddingFavourite = !item.isFavourite
+    if (isAddingFavourite) {
+      const favouriteCount = items.filter((i) => i.isFavourite).length
+      if (favouriteCount >= MAX_FAVOURITES) {
+        const message = `You can only favourite up to ${MAX_FAVOURITES} holdings.`
+        setError(message)
+        return { success: false, error: message }
+      }
+    }
+
+    setError(null)
+    setItems((current) =>
+      current.map((i) => (i.id === item.id ? { ...i, isFavourite: !i.isFavourite } : i))
+    )
+    try {
+      await toggleFavourite(item.ticker, item.assetType)
+      return { success: true }
+    } catch (err) {
+      setItems((current) =>
+        current.map((i) => (i.id === item.id ? { ...i, isFavourite: item.isFavourite } : i))
+      )
+      setError(err.message)
+      return { success: false, error: err.message }
+    }
+  }
+
   const getTotalValue = () => {
     return items.reduce((sum, item) => sum + (item.marketValue || 0), 0)
   }
@@ -119,6 +153,7 @@ export const usePortfolio = () => {
     fetchPerformance,
     handleBuy,
     handleSell,
+    handleToggleFavourite,
     getTotalValue,
     getCashBalance,
     getTotalCostBasis,
