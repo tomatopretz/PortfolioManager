@@ -8,11 +8,10 @@ const defaultFormState = {
   quantity: '',
   price: '',
   amount: '',
-  useCash: true,
   date: today,
 }
 
-function AddAssetModal({ isOpen, onClose, onSubmit }) {
+function DeleteAssetModal({ isOpen, onClose, onSubmit }) {
   const [formData, setFormData] = useState(defaultFormState)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -20,10 +19,10 @@ function AddAssetModal({ isOpen, onClose, onSubmit }) {
   const isCashAsset = formData.assetType === 'cash'
 
   const handleFieldChange = (event) => {
-    const { name, value, type, checked } = event.target
+    const { name, value } = event.target
     setFormData((current) => ({
       ...current,
-      [name]: type === 'checkbox' ? checked : value,
+      [name]: value,
     }))
     setError('')
   }
@@ -45,18 +44,17 @@ function AddAssetModal({ isOpen, onClose, onSubmit }) {
 
     try {
       const payload = {
-        type: 'buy',
+        type: 'sell',
         ticker: isCashAsset ? 'USD' : formData.ticker.trim().toUpperCase(),
         assetType: formData.assetType,
         quantity: Number(isCashAsset ? formData.amount : formData.quantity),
         price: isCashAsset ? 1 : Number(formData.price),
-        useCash: isCashAsset ? true : formData.useCash,
         date: formData.date,
       }
 
       if (isCashAsset) {
         if (!payload.quantity || payload.quantity <= 0) {
-          throw new Error('Please enter a valid cash amount.')
+          throw new Error('Please enter a valid withdrawal amount.')
         }
       } else {
         if (!payload.ticker) {
@@ -76,7 +74,7 @@ function AddAssetModal({ isOpen, onClose, onSubmit }) {
 
       const result = await onSubmit(payload)
       if (!result?.success) {
-        throw new Error(result?.error || 'Unable to add this asset.')
+        throw new Error(result?.error || 'Unable to sell this asset.')
       }
 
       handleClose()
@@ -108,14 +106,14 @@ function AddAssetModal({ isOpen, onClose, onSubmit }) {
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-secondary)]">
               New Transaction
             </p>
-            <h2 className="mt-1 text-2xl font-bold text-[var(--text-primary)]">Add Asset</h2>
+            <h2 className="mt-1 text-2xl font-bold text-[var(--text-primary)]">Sell Asset</h2>
           </div>
 
           <button
             type="button"
             onClick={handleClose}
             className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] p-2 text-[var(--text-secondary)] hover:bg-[var(--surface-3)]"
-            aria-label="Close add asset form"
+            aria-label="Close sell asset form"
           >
             ✕
           </button>
@@ -159,7 +157,7 @@ function AddAssetModal({ isOpen, onClose, onSubmit }) {
           {isCashAsset ? (
             <div>
               <label htmlFor="amount" className="mb-2 block text-sm font-medium text-[var(--text-primary)]">
-                Amount
+                Withdrawal Amount
               </label>
               <input
                 id="amount"
@@ -194,7 +192,7 @@ function AddAssetModal({ isOpen, onClose, onSubmit }) {
 
               <div>
                 <label htmlFor="price" className="mb-2 block text-sm font-medium text-[var(--text-primary)]">
-                  Price
+                  Sale Price
                 </label>
                 <input
                   id="price"
@@ -209,21 +207,6 @@ function AddAssetModal({ isOpen, onClose, onSubmit }) {
                 />
               </div>
             </div>
-          )}
-
-          {!isCashAsset && (
-            <label className="flex items-center gap-3 rounded-lg border border-[var(--gridline)] bg-[var(--surface-2)] px-3 py-2.5">
-              <input
-                type="checkbox"
-                name="useCash"
-                checked={formData.useCash}
-                onChange={handleFieldChange}
-                className="h-4 w-4 rounded border-[var(--gridline)] text-[var(--primary)] focus:ring-[var(--primary)]"
-              />
-              <span className="text-sm font-medium text-[var(--text-primary)]">
-                Use cash balance for this transaction
-              </span>
-            </label>
           )}
 
           <div>
@@ -259,7 +242,7 @@ function AddAssetModal({ isOpen, onClose, onSubmit }) {
               disabled={submitting}
               className="rounded-lg bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--primary-dark)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {submitting ? 'Saving...' : 'Add Asset'}
+              {submitting ? 'Saving...' : 'Sell Asset'}
             </button>
           </div>
         </form>
@@ -268,4 +251,4 @@ function AddAssetModal({ isOpen, onClose, onSubmit }) {
   )
 }
 
-export default AddAssetModal
+export default DeleteAssetModal

@@ -1,5 +1,6 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { useState } from 'react'
+import { formatCurrency } from '../../utils/format'
 
 const COLORS = [
   '#3b82f6',
@@ -55,7 +56,7 @@ function AllocationPieChart({ items }) {
             {entry.name}
           </p>
           <p className="text-[var(--text-secondary)]">
-            ${entry.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {formatCurrency(entry.value)}
           </p>
           <p className="text-xs text-[var(--text-muted)]">
             {percent}% of portfolio
@@ -145,7 +146,7 @@ function AllocationPieChart({ items }) {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-[var(--text-primary)]">
-                      ${entry.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {formatCurrency(entry.value)}
                     </td>
                     <td className="px-4 py-3 text-right text-[var(--text-secondary)]">
                       {percent}%

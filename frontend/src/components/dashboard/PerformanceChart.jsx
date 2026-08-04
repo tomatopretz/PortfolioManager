@@ -1,5 +1,6 @@
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import TimeRangeFilter from './TimeRangeFilter'
+import { formatCurrency } from '../../utils/format'
 
 function PerformanceChart({ data, timeRange, onTimeRangeChange }) {
   if (!data || data.length === 0) {
@@ -52,7 +53,7 @@ function PerformanceChart({ data, timeRange, onTimeRangeChange }) {
             {payload[0].payload.date}
           </p>
           <p className="text-xs text-[var(--primary)]">
-            ${payload[0].value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {formatCurrency(payload[0].value)}
           </p>
         </div>
       )

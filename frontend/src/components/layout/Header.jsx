@@ -1,5 +1,7 @@
 import { usePortfolioContext } from '../../context/PortfolioContext'
 import AddAssetButton from '../portfolio/AddAssetButton'
+import DeleteAssetButton from '../portfolio/DeleteAssetButton'
+import { formatCurrency, formatSignedCurrencyOrNA, formatSignedPercentOrNA } from '../../utils/format'
 
 function Header() {
   const { getTotalValue, getTotalReturn } = usePortfolioContext()
@@ -23,10 +25,7 @@ function Header() {
                 Total Value
               </p>
               <p className="text-xl font-bold text-[var(--text-primary)]">
-                ${totalValue.toLocaleString('en-US', {
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 0,
-                })}
+                {formatCurrency(totalValue, 0)}
               </p>
             </div>
 
@@ -37,10 +36,7 @@ function Header() {
                 Total Return
               </p>
               <p className={`text-xl font-bold ${isPositive ? 'text-[var(--status-good)]' : 'text-[var(--status-serious)]'}`}>
-                {isPositive ? '+' : ''}{totalReturn.amount.toLocaleString('en-US', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })} ({isPositive ? '+' : ''}{totalReturn.percent.toFixed(2)}%)
+                {formatSignedCurrencyOrNA(totalReturn.amount)} ({formatSignedPercentOrNA(totalReturn.percent)})
               </p>
             </div>
           </div>
@@ -48,12 +44,7 @@ function Header() {
           {/* Buttons */}
           <div className="flex gap-2.5">
             <AddAssetButton />
-            <button
-              type="button"
-              className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-5 py-2 text-sm font-semibold text-[var(--text-primary)] transition-all duration-200 hover:bg-[var(--surface-3)] hover:shadow-md hover:-translate-y-0.5 active:translate-y-0"
-            >
-              Sell Asset
-            </button>
+            <DeleteAssetButton />
           </div>
         </div>
       </div>
