@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from models.PortfolioItemDTO import PortfolioItemDTO
 from models.TransactionDTO import TransactionDTO
-from services.performance_service import PerformanceService
+from services.performance_service import PerformanceService, _daily_range_start
 
 AAPL_ID = '11111111-1111-4111-8111-111111111111'
 MSFT_ID = '22222222-2222-4222-8222-222222222222'
@@ -18,7 +18,7 @@ def _item(item_id, ticker, quantity=0):
     return PortfolioItemDTO(
         id=item_id,
         ticker=ticker,
-        assetType='cash' if ticker == 'CASH' else 'stock',
+        assetType='CASH' if ticker == 'USD' else 'STOCK',
         quantity=quantity,
         costBasis=0,
     )
@@ -34,6 +34,13 @@ def _txn(item_id, txn_type, quantity, price, txn_date):
         date=txn_date,
         useCash=True,
     )
+
+
+def test_daily_range_start_uses_calendar_boundaries():
+    assert _daily_range_start(date(2026, 8, 31), '1W') == date(2026, 8, 24)
+    assert _daily_range_start(date(2026, 8, 31), '1M') == date(2026, 7, 31)
+    assert _daily_range_start(date(2026, 8, 31), '6M') == date(2026, 2, 28)
+    assert _daily_range_start(date(2024, 2, 29), '1Y') == date(2023, 2, 28)
 
 
 @patch('services.performance_service._now')
@@ -93,7 +100,7 @@ def test_get_performance_reconstructs_buy_sell_mixed_history_with_cash(
         ('2026-07-28', 1000.0),
         ('2026-07-29', 1100.0),
         ('2026-07-30', 1260.0),
-        ('2026-07-31', 1310.0),
+        ('2026-07-31', 1326.0),
     ]
     assert [(point.date, point.value) for point in result.ranges['1D']] == [
         ('2026-07-30T09:35:00Z', 1160.0),
@@ -101,6 +108,9 @@ def test_get_performance_reconstructs_buy_sell_mixed_history_with_cash(
         ('2026-07-31T09:30:00Z', 1318.0),
         ('2026-07-31T09:35:00Z', 1326.0),
     ]
+    latest_value = result.ranges['1D'][-1].value
+    for range_key in ['1W', '1M', '6M', '1Y', 'ALL']:
+        assert result.ranges[range_key][-1].value == latest_value
     mock_daily_prices.assert_called_once_with(['AAPL', 'MSFT'], date(2025, 7, 31), date(2026, 7, 31))
     mock_intraday_prices.assert_called_once_with(['AAPL', 'MSFT'])
 
@@ -281,35 +291,6 @@ def test_get_performance_treats_usd_as_cash_when_building_history(
     mock_intraday_prices.assert_called_once_with([])
 
 
-@patch('services.performance_service.price_service.list_current_prices')
-@patch('services.performance_service.price_service.get_intraday_price_history')
-@patch('services.performance_service.price_service.get_daily_price_history')
-@patch('services.performance_service.PortfolioService.list_portfolio_items')
-@patch('services.performance_service.TransactionService.list_transactions')
-@patch('services.performance_service._today')
-def test_get_performance_values_current_holdings_by_market_price_when_no_transactions(
-    mock_today,
-    mock_list_transactions,
-    mock_list_items,
-    mock_daily_prices,
-    mock_intraday_prices,
-    mock_current_prices,
-):
-    mock_today.return_value = date(2026, 7, 31)
-    mock_list_transactions.return_value = []
-    mock_list_items.return_value = [_item(AAPL_ID, 'AAPL', quantity=10), _item(CASH_ID, 'USD', quantity=500)]
-    mock_current_prices.return_value = {'AAPL': 125.0}
-
-    result = PerformanceService.get_performance()
-
-    assert [(point.date, point.value) for point in result.ranges['ALL']] == [
-        ('2026-07-31', 1750.0),
-    ]
-    mock_daily_prices.assert_not_called()
-    mock_intraday_prices.assert_not_called()
-    mock_current_prices.assert_called_once_with(['AAPL'])
-
-
 @patch('services.performance_service.price_service.get_intraday_price_history')
 @patch('services.performance_service.price_service.get_daily_price_history')
 @patch('services.performance_service.PortfolioService.list_portfolio_items')
@@ -326,5 +307,6 @@ def test_get_performance_returns_empty_ranges_for_empty_transaction_history(
     result = PerformanceService.get_performance()
 
     assert result.ranges == {'1D': [], '1W': [], '1M': [], '6M': [], '1Y': [], 'ALL': []}
+    mock_list_items.assert_not_called()
     mock_daily_prices.assert_not_called()
     mock_intraday_prices.assert_not_called()
