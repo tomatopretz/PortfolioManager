@@ -12,7 +12,7 @@ const GRADIENT_ID = 'performance-area-gradient'
 const formatHourTick = (timestamp) => {
   const hour = new Date(timestamp).getHours()
   const displayHour = hour % 12 === 0 ? 12 : hour % 12
-  return `${displayHour}${hour >= 12 ? 'p' : 'a'}`
+  return `${displayHour}${hour >= 12 ? 'pm' : 'am'}`
 }
 
 /** One tick on every whole hour covered by the intraday series. */

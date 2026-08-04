@@ -41,6 +41,8 @@ export const usePortfolio = () => {
     [loadItems, loadPerformance, timeRange]
   )
 
+  // Failures are returned to the caller only: the transaction modal owns the form and shows
+  // them inline, so pushing them into `actionError` would also raise a banner on every page.
   const submitTransaction = useCallback(
     async (request, payload) => {
       setActionError(null)
@@ -50,7 +52,6 @@ export const usePortfolio = () => {
         setDataVersion((version) => version + 1)
         return { success: true }
       } catch (err) {
-        setActionError(err.message)
         return { success: false, error: err.message }
       }
     },
