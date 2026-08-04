@@ -10,4 +10,5 @@ export const getPortfolioItems = service.getPortfolioItems;
 export const getPerformance = service.getPerformance;
 export const buyAsset = service.buyAsset;
 export const sellAsset = service.sellAsset;
+export const getTransactions = service.getTransactions;
 export const toggleFavourite = service.toggleFavourite;

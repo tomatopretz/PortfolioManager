@@ -106,6 +106,11 @@ export const sellAsset = async ({ ticker, assetType, quantity, price }) => {
   return recordTransaction(item, 'sell', quantity, price, true);
 };
 
+export const getTransactions = async () => {
+  await simulateLatency();
+  return mockData.transactions;
+};
+
 export const toggleFavourite = async (ticker, assetType) => {
   await simulateLatency();
 

@@ -51,11 +51,6 @@ class PortfolioService:
         return PortfolioItemRepository.get(item_id)
 
     @staticmethod
-    def get_portfolio_item_by_ticker(ticker: str) -> Optional[PortfolioItemDTO]:
-        """Get a single portfolio item by ticker."""
-        return PortfolioItemRepository.get_by_ticker(ticker.upper())
-
-    @staticmethod
     def get_portfolio_item_by_ticker_and_asset_type(ticker: str, asset_type: str) -> Optional[PortfolioItemDTO]:
         """Get a single portfolio item by its natural key (ticker + assetType)."""
         return PortfolioItemRepository.get_by_ticker_and_asset_type(ticker.upper(), asset_type.upper())
@@ -74,11 +69,6 @@ class PortfolioService:
     def update_portfolio_item(item: PortfolioItemDTO) -> PortfolioItemDTO:
         """Update an existing portfolio item."""
         return PortfolioItemRepository.update(item)
-
-    @staticmethod
-    def delete_portfolio_item(item_id: str) -> None:
-        """Delete a portfolio item."""
-        PortfolioItemRepository.delete(item_id)
 
     @staticmethod
     def toggle_favourite(ticker: str, asset_type: str) -> Optional[PortfolioItemDTO]:

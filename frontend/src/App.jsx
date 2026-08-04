@@ -3,7 +3,7 @@ import { PortfolioProvider } from './context/PortfolioContext'
 import AppLayout from './components/layout/AppLayout'
 import DashboardPage from './pages/DashboardPage'
 import HoldingsPage from './pages/HoldingsPage'
-import PerformancePage from './pages/PerformancePage'
+import TransactionHistoryPage from './pages/TransactionHistoryPage'
 
 function App() {
   return (
@@ -13,7 +13,7 @@ function App() {
           <Route element={<AppLayout />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/holdings" element={<HoldingsPage />} />
-            <Route path="/performance" element={<PerformancePage />} />
+            <Route path="/transactions" element={<TransactionHistoryPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

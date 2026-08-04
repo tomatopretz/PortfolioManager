@@ -171,8 +171,6 @@ def _sell_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Conn
     new_quantity = round_money(item.quantity - request.quantity)
     item.costBasis = round_money(cost_basis_per_share * new_quantity)
     item.quantity = new_quantity
-    # kept (at quantity 0) rather than deleted: transaction.portfolio_item_id is ON DELETE
-    # CASCADE, so deleting this row would wipe every transaction ever recorded against it
     PortfolioItemRepository.update(item, conn=conn)
 
     return TransactionRepository.add(

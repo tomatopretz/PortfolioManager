@@ -56,6 +56,11 @@ const recordTransaction = (payload) => post('/api/transactions', payload);
 export const buyAsset = recordTransaction;
 export const sellAsset = recordTransaction;
 
+export const getTransactions = async () => {
+  const response = await get('/api/transactions');
+  return response || [];
+};
+
 export const toggleFavourite = async (ticker, assetType) => {
   const response = await patch(
     `/api/portfolio/${encodeURIComponent(ticker)}/${encodeURIComponent(assetType)}/favourite`
