@@ -218,7 +218,7 @@ def test_buy_asset_with_cash_deducts_balance_and_records_both_transactions(mock_
     assert cash_txn.type == 'sell'
     assert cash_txn.quantity == 1500
     assert cash_txn.price == 1
-    assert cash_txn.useCash is False
+    assert cash_txn.useCash is True
 
     assert stock_txn.type == 'buy'
     assert stock_txn.quantity == 10
@@ -307,6 +307,7 @@ def test_sell_asset_credits_cash_and_reduces_cost_basis_proportionally(mock_get_
     assert cash_txn.type == 'buy'
     assert cash_txn.quantity == 480
     assert cash_txn.price == 1
+    assert cash_txn.useCash is True
 
     assert stock_txn.type == 'sell'
     assert stock_txn.quantity == 4

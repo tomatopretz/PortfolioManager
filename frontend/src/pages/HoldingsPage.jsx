@@ -230,10 +230,10 @@ function HoldingsPage() {
                         {priceAvailable ? formatCurrency(item.currentPrice) : 'N/A'}
                       </td>
                       <td className="px-4 py-4 text-right text-[var(--text-secondary)]">
-                        {formatCurrency(item.costBasis)}
+                        {formatCurrencyOrNA(getCostBasisPerShare(item))}
                       </td>
                       <td className="px-4 py-4 text-right text-[var(--text-secondary)]">
-                        {formatCurrencyOrNA(getCostBasisPerShare(item))}
+                        {formatCurrency(item.costBasis)}
                       </td>
                       <td className="px-4 py-4 text-right font-semibold text-[var(--text-primary)]">
                         {priceAvailable ? formatCurrency(item.marketValue) : 'N/A'}
