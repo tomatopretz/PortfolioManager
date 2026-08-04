@@ -14,6 +14,13 @@ logger = logging.getLogger(__name__)
 _MAX_ATTEMPTS = 3
 _RETRY_BACKOFF_SECONDS = 0.3
 
+# Raw (unadjusted) closes everywhere. yfinance defaults to auto_adjust=True, which retroactively
+# rewrites historical closes for dividends and splits - so a past portfolio value would drift
+# away from what the portfolio was actually worth on the day, and away from the cost basis
+# recorded from real traded prices. Every fetch in this module pins it off, so current prices
+# and history are always on the same basis.
+_AUTO_ADJUST = False
+
 
 class PriceNotFoundError(LookupError):
     """Raised when yfinance has no price data for a ticker (optionally on a given date)."""
@@ -48,7 +55,9 @@ def list_current_prices(tickers: list[str]) -> dict[str, float]:
         if attempt > 0:
             time.sleep(_RETRY_BACKOFF_SECONDS)
 
-        data = yf.download(remaining, period='1d', group_by='ticker', progress=False)
+        data = yf.download(
+            remaining, period='1d', group_by='ticker', auto_adjust=_AUTO_ADJUST, progress=False
+        )
         still_missing = []
         for ticker in remaining:
             try:
@@ -64,21 +73,48 @@ def list_current_prices(tickers: list[str]) -> dict[str, float]:
     return prices
 
 
+def _download_close_history(tickers: list[str], key_type: str, **download_kwargs):
+    """Download close history, retrying only the tickers that came back with nothing usable.
+
+    Same reasoning as list_current_prices: a ticker Yahoo transiently omits would otherwise be
+    indistinguishable from a ticker with no data, and a holding with no price history is valued
+    at zero for *every* point on the chart - silently understating the whole portfolio.
+    """
+    prices = {}
+    remaining = list(tickers)
+
+    for attempt in range(_MAX_ATTEMPTS):
+        if not remaining:
+            break
+        if attempt > 0:
+            time.sleep(_RETRY_BACKOFF_SECONDS)
+
+        data = yf.download(
+            remaining, group_by='ticker', auto_adjust=_AUTO_ADJUST, progress=False, **download_kwargs
+        )
+        extracted = _extract_close_history(data, remaining, key_type=key_type)
+        prices.update({ticker: history for ticker, history in extracted.items() if history})
+        remaining = [ticker for ticker in remaining if not prices.get(ticker)]
+
+    for ticker in remaining:
+        logger.warning('No close history for ticker=%s after %d attempts', ticker, _MAX_ATTEMPTS)
+        prices[ticker] = {}
+
+    return prices
+
+
 def get_daily_price_history(tickers: list[str], start: date, end: date) -> dict[str, dict[date, float]]:
     """Get daily close prices for tickers between start and end, inclusive."""
     if not tickers:
         return {}
 
-    data = yf.download(
+    return _download_close_history(
         tickers,
+        key_type='date',
         start=start,
         end=end + timedelta(days=1),
         interval='1d',
-        group_by='ticker',
-        auto_adjust=False,
-        progress=False,
     )
-    return _extract_close_history(data, tickers, key_type='date')
 
 
 def get_intraday_price_history(
@@ -90,15 +126,12 @@ def get_intraday_price_history(
     if not tickers:
         return {}
 
-    data = yf.download(
+    return _download_close_history(
         tickers,
+        key_type='datetime',
         period=period,
         interval=interval,
-        group_by='ticker',
-        auto_adjust=False,
-        progress=False,
     )
-    return _extract_close_history(data, tickers, key_type='datetime')
 
 
 def _extract_close_history(data, tickers: list[str], key_type: str):
@@ -109,7 +142,8 @@ def _extract_close_history(data, tickers: list[str], key_type: str):
         try:
             close_series = _close_series_for_ticker(data, ticker, len(tickers) == 1)
         except KeyError:
-            logger.warning('No close history for ticker=%s', ticker)
+            # Not logged here: _download_close_history retries misses and warns only about
+            # tickers that are still empty once every attempt is spent.
             prices[ticker] = {}
             continue
 
@@ -141,7 +175,7 @@ def _close_series_for_ticker(data, ticker: str, is_single_ticker: bool):
 def get_price_on_date(ticker: str, date: datetime) -> float:
     """Get the closing price for a ticker on a specific date."""
     next_day = date + timedelta(days=1)
-    history = yf.Ticker(ticker).history(start=date, end=next_day)
+    history = yf.Ticker(ticker).history(start=date, end=next_day, auto_adjust=_AUTO_ADJUST)
 
     try:
         close = history['Close'].iloc[0]
@@ -153,7 +187,7 @@ def get_price_on_date(ticker: str, date: datetime) -> float:
 
 def get_current_price(ticker: str) -> float:
     """Get the latest available closing price for a single ticker."""
-    history = yf.Ticker(ticker).history(period='1d')
+    history = yf.Ticker(ticker).history(period='1d', auto_adjust=_AUTO_ADJUST)
 
     try:
         close = history['Close'].iloc[-1]
