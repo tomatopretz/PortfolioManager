@@ -36,30 +36,14 @@ const actionLabels = {
   withdrawal: 'Withdrawal',
 }
 
-// A buy/sell of a non-cash asset that used cash records a second, auto-generated Transaction
-// row against the CASH item (opposite type, same date, amount = quantity * price) so the CASH
-// balance stays in sync. That row isn't a distinct user action - it's collapsed into the asset
-// row it belongs to so buy/sell counts reflect actual trades. Cash rows that don't pair up with
-// an asset trade are real deposits/withdrawals and are kept, just labeled accordingly.
+// A buy/sell of a non-cash asset that used cash records a second, auto-generated CASH-item
+// Transaction row so the CASH balance stays in sync. The backend marks that companion row
+// useCash=true (it only exists because a trade caused it); a direct deposit/withdrawal against
+// CASH is always useCash=false. So a CASH-type row is a phantom leg to hide when useCash is
+// true, and a real deposit/withdrawal to keep (relabeled) when useCash is false.
 const collapseCashLegs = (enrichedTransactions) => {
-  const assetTxs = enrichedTransactions.filter((t) => t.assetType !== 'cash')
-  const cashTxs = enrichedTransactions.filter((t) => t.assetType === 'cash')
-  const mergedCashIds = new Set()
-
-  assetTxs.forEach((t) => {
-    if (!t.useCash) return
-    const expectedCashType = t.type === 'buy' ? 'sell' : 'buy'
-    const match = cashTxs.find((c) => (
-      !mergedCashIds.has(c.id) &&
-      c.type === expectedCashType &&
-      new Date(c.date).getTime() === new Date(t.date).getTime() &&
-      Math.abs(c.quantity - t.total) < 0.01
-    ))
-    if (match) mergedCashIds.add(match.id)
-  })
-
   return enrichedTransactions
-    .filter((t) => !mergedCashIds.has(t.id))
+    .filter((t) => !(t.assetType === 'cash' && t.useCash))
     .map((t) => {
       if (t.assetType === 'cash') {
         return { ...t, action: t.type === 'buy' ? 'deposit' : 'withdrawal' }
