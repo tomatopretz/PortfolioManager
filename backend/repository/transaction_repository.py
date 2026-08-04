@@ -41,15 +41,6 @@ class TransactionRepository:
             return [_row_to_transaction(row) for row in cur.fetchall()]
 
     @staticmethod
-    def list_by_portfolio_item(portfolio_item_id: str) -> list[TransactionDTO]:
-        with get_cursor() as cur:
-            cur.execute(
-                f'SELECT {_COLUMNS} FROM {TABLE} WHERE portfolio_item_id = %s ORDER BY date DESC',
-                (portfolio_item_id,),
-            )
-            return [_row_to_transaction(row) for row in cur.fetchall()]
-
-    @staticmethod
     def list_by_tickers(tickers: list[str]) -> list[TransactionDTO]:
         with get_cursor() as cur:
             cur.execute(
@@ -77,27 +68,3 @@ class TransactionRepository:
             )
             transaction.id = str(cur.fetchone()['id'])
         return transaction
-
-    @staticmethod
-    def update(transaction: TransactionDTO) -> TransactionDTO:
-        with get_cursor() as cur:
-            cur.execute(
-                f'UPDATE {TABLE} SET portfolio_item_id = %s, type = %s, quantity = %s, '
-                f'price = %s, date = %s, use_cash = %s WHERE id = %s',
-                (
-                    transaction.portfolioItemId,
-                    transaction.type,
-                    transaction.quantity,
-                    transaction.price,
-                    transaction.date,
-                    transaction.useCash,
-                    transaction.id,
-                ),
-            )
-        return transaction
-
-    @staticmethod
-    def delete(transaction_id: str) -> bool:
-        with get_cursor() as cur:
-            cur.execute(f'DELETE FROM {TABLE} WHERE id = %s', (transaction_id,))
-            return cur.rowcount > 0
