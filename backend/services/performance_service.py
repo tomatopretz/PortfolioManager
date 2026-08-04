@@ -1,4 +1,5 @@
 from bisect import bisect_right
+from calendar import monthrange
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 
@@ -9,15 +10,15 @@ from services.portfolio_service import PortfolioService
 from services.transaction_service import TransactionService
 
 CASH_TICKER = 'USD'
-CASH_TICKERS = {'CASH', 'USD'}
-CASH_ASSET_TYPE = 'CASH'
 RANGE_KEYS = ('1D', '1W', '1M', '6M', '1Y', 'ALL')
-DAILY_RANGE_DAYS = {
-    '1W': 7,
-    '1M': 30,
-    '6M': 182,
-    '1Y': 365,
+DAILY_RANGE_MONTHS = {
+    '1M': 1,
+    '6M': 6,
+    '1Y': 12,
 }
+
+
+# --- Public service -----------------------------------------------------------
 
 
 class PerformanceService:
@@ -25,63 +26,76 @@ class PerformanceService:
 
     @staticmethod
     def get_performance() -> PerformanceHistoryResultDTO:
+        """Return chart-ready portfolio value points for all supported ranges."""
         transactions = sorted(TransactionService.list_transactions(), key=lambda txn: txn.date)
-        tickers_by_item_id = _load_tickers_by_portfolio_item_id()
-        current_snapshot = _current_holdings_snapshot()
 
         if not transactions:
-            if not current_snapshot:
-                return PerformanceHistoryResultDTO(ranges={key: [] for key in RANGE_KEYS})
+            return PerformanceHistoryResultDTO(ranges={key: [] for key in RANGE_KEYS})
 
-            today = _today()
-            range_points = [
-                PerformancePointDTO(date=today.isoformat(), value=_value_from_current_prices(current_snapshot))
-            ]
-            return PerformanceHistoryResultDTO(ranges={key: range_points.copy() for key in RANGE_KEYS})
-
+        items = PortfolioService.list_portfolio_items()
+        tickers_by_item_id = _load_tickers_by_portfolio_item_id(items)
+        current_holdings = _current_holdings_snapshot(items)
         priced_tickers = _priced_tickers(transactions, tickers_by_item_id)
         today = _today()
         now = _now()
         earliest_transaction_date = transactions[0].date.date()
-        daily_start = min(earliest_transaction_date, today - timedelta(days=DAILY_RANGE_DAYS['1Y']))
+        daily_start = min(earliest_transaction_date, _daily_range_start(today, '1Y'))
 
         daily_prices = price_service.get_daily_price_history(priced_tickers, daily_start, today)
         intraday_prices = price_service.get_intraday_price_history(priced_tickers)
+        latest_value = _latest_intraday_value(current_holdings, intraday_prices, daily_prices, now)
 
         ranges = {
-            '1D': _build_intraday_range(transactions, tickers_by_item_id, intraday_prices, daily_prices, now),
+            '1D': _build_intraday_range(
+                transactions,
+                tickers_by_item_id,
+                intraday_prices,
+                daily_prices,
+                current_holdings,
+                now,
+            ),
             '1W': _build_daily_range(
                 transactions,
                 tickers_by_item_id,
                 daily_prices,
-                today - timedelta(days=DAILY_RANGE_DAYS['1W']),
+                current_holdings,
+                latest_value,
+                _daily_range_start(today, '1W'),
                 today,
             ),
             '1M': _build_daily_range(
                 transactions,
                 tickers_by_item_id,
                 daily_prices,
-                today - timedelta(days=DAILY_RANGE_DAYS['1M']),
+                current_holdings,
+                latest_value,
+                _daily_range_start(today, '1M'),
                 today,
             ),
             '6M': _build_daily_range(
                 transactions,
                 tickers_by_item_id,
                 daily_prices,
-                today - timedelta(days=DAILY_RANGE_DAYS['6M']),
+                current_holdings,
+                latest_value,
+                _daily_range_start(today, '6M'),
                 today,
             ),
             '1Y': _build_daily_range(
                 transactions,
                 tickers_by_item_id,
                 daily_prices,
-                today - timedelta(days=DAILY_RANGE_DAYS['1Y']),
+                current_holdings,
+                latest_value,
+                _daily_range_start(today, '1Y'),
                 today,
             ),
             'ALL': _build_daily_range(
                 transactions,
                 tickers_by_item_id,
                 daily_prices,
+                current_holdings,
+                latest_value,
                 earliest_transaction_date,
                 today,
             ),
@@ -90,11 +104,16 @@ class PerformanceService:
         return PerformanceHistoryResultDTO(ranges=ranges)
 
 
+# --- Clock and range helpers --------------------------------------------------
+
+
 def _today() -> date:
+    """Return today's date; isolated for deterministic tests."""
     return date.today()
 
 
 def _now() -> datetime:
+    """Return current UTC time as naive datetime for intraday comparisons."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
@@ -108,31 +127,39 @@ def _to_naive_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc).replace(tzinfo=None)
 
 
-def _value_from_current_prices(holdings: dict[str, float]) -> float:
-    non_cash_tickers = sorted(ticker for ticker in holdings if ticker != CASH_TICKER)
-    current_prices = price_service.list_current_prices(non_cash_tickers) if non_cash_tickers else {}
+def _daily_range_start(today: date, range_key: str) -> date:
+    """Return the inclusive daily start date for a supported chart range."""
+    if range_key == '1W':
+        return today - timedelta(days=7)
 
-    total = holdings.get(CASH_TICKER, 0.0)
-    for ticker in non_cash_tickers:
-        price = current_prices.get(ticker)
-        if price is not None:
-            total += holdings[ticker] * price
-
-    return round(total, 2)
+    return _subtract_months(today, DAILY_RANGE_MONTHS[range_key])
 
 
-def _load_tickers_by_portfolio_item_id() -> dict[str, str]:
-    items = PortfolioService.list_portfolio_items()
-    return {item.id: (_normalize_cash_ticker(item.ticker) if item.ticker else '') for item in items if item.id}
+def _subtract_months(value: date, months: int) -> date:
+    """Subtract calendar months while clamping to the destination month's last day."""
+    month_index = value.year * 12 + value.month - 1 - months
+    year = month_index // 12
+    month = month_index % 12 + 1
+    day = min(value.day, monthrange(year, month)[1])
+    return value.replace(year=year, month=month, day=day)
 
 
-def _current_holdings_snapshot() -> dict[str, float]:
+# --- Portfolio snapshot helpers ----------------------------------------------
+
+
+def _load_tickers_by_portfolio_item_id(items) -> dict[str, str]:
+    """Map portfolio item IDs to normalized tickers for transaction replay."""
+    return {item.id: _normalize_ticker(item.ticker) for item in items if item.id}
+
+
+def _current_holdings_snapshot(items) -> dict[str, float]:
+    """Build the current holdings quantity by ticker from portfolio items."""
     holdings = defaultdict(float)
-    for item in PortfolioService.list_portfolio_items():
+    for item in items:
         if item is None or not item.id:
             continue
 
-        ticker = _normalize_cash_ticker(item.ticker)
+        ticker = _normalize_ticker(item.ticker)
         quantity = float(item.quantity or 0)
         if _is_cash_ticker(ticker):
             holdings[CASH_TICKER] += quantity
@@ -142,39 +169,42 @@ def _current_holdings_snapshot() -> dict[str, float]:
     return dict(holdings)
 
 
-def _normalize_cash_ticker(ticker: str | None) -> str:
-    ticker = (ticker or '').upper()
-    return CASH_TICKER if ticker in CASH_TICKERS else ticker
+def _normalize_ticker(ticker: str | None) -> str:
+    """Normalize a ticker for lookup and comparison."""
+    return (ticker or '').upper()
 
 
 def _is_cash_ticker(ticker: str | None) -> bool:
-    return bool(ticker) and _normalize_cash_ticker(ticker) == CASH_TICKER
+    """Return whether the ticker is the canonical cash ticker."""
+    return _normalize_ticker(ticker) == CASH_TICKER
 
 
 def _priced_tickers(transactions, tickers_by_item_id: dict[str, str]) -> list[str]:
-    item_tickers = {
-        _normalize_cash_ticker(item.ticker)
-        for item in PortfolioService.list_portfolio_items()
-        if item and item.ticker and not _is_cash_ticker(item.ticker)
-    }
+    """Return non-cash tickers that need historical price data."""
     transaction_tickers = {
         ticker
         for txn in transactions
         for ticker in [tickers_by_item_id.get(txn.portfolioItemId)]
         if ticker and not _is_cash_ticker(ticker)
     }
-    return sorted(item_tickers | transaction_tickers)
+    return sorted(transaction_tickers)
+
+
+# --- Range builders -----------------------------------------------------------
 
 
 def _build_daily_range(
     transactions,
     tickers_by_item_id: dict[str, str],
     daily_prices: dict[str, dict[date, float]],
+    current_holdings: dict[str, float],
+    latest_value: float | None,
     start_date: date,
     end_date: date,
 ) -> list[PerformancePointDTO]:
+    """Build daily value points by walking current holdings backward through transactions."""
     points = []
-    holdings = _current_holdings_snapshot()
+    holdings = current_holdings.copy()
     sorted_transactions = sorted(transactions, key=lambda txn: txn.date)
     price_indexes = _build_price_indexes(daily_prices)
     txn_index = len(sorted_transactions) - 1
@@ -188,7 +218,9 @@ def _build_daily_range(
         points.append(
             PerformancePointDTO(
                 date=current_date.isoformat(),
-                value=_calculate_value(holdings, daily_prices, price_indexes, current_date),
+                value=latest_value
+                if latest_value is not None and current_date == end_date
+                else _calculate_value(holdings, daily_prices, price_indexes, current_date),
             )
         )
         current_date -= timedelta(days=1)
@@ -201,6 +233,7 @@ def _build_intraday_range(
     tickers_by_item_id: dict[str, str],
     intraday_prices: dict[str, dict[datetime, float]],
     daily_prices: dict[str, dict[date, float]],
+    current_holdings: dict[str, float],
     now: datetime,
 ) -> list[PerformancePointDTO]:
     """Chart the true last 24 hours: real bars while the market was open in that window,
@@ -210,10 +243,7 @@ def _build_intraday_range(
     if not any(intraday_prices.values()):
         return []
 
-    intraday_prices = {
-        ticker: {_to_naive_utc(timestamp): price for timestamp, price in ticker_prices.items()}
-        for ticker, ticker_prices in intraday_prices.items()
-    }
+    intraday_prices = _normalize_intraday_prices(intraday_prices)
     window_start = now - timedelta(hours=24)
 
     bar_timestamps = {
@@ -229,7 +259,7 @@ def _build_intraday_range(
     timestamps = sorted(bar_timestamps | txn_timestamps | {window_start, now})
 
     points = []
-    holdings = _current_holdings_snapshot()
+    holdings = current_holdings.copy()
     intraday_price_indexes = _build_price_indexes(intraday_prices)
     daily_price_indexes = _build_price_indexes(daily_prices)
     txn_index = len(sorted_transactions) - 1
@@ -258,7 +288,11 @@ def _build_intraday_range(
     return list(reversed(points))
 
 
+# --- Transaction replay -------------------------------------------------------
+
+
 def _apply_transaction(holdings, txn, tickers_by_item_id: dict[str, str], reverse: bool = False) -> None:
+    """Apply or reverse one transaction against a mutable holdings snapshot."""
     ticker = tickers_by_item_id.get(txn.portfolioItemId)
     if not ticker:
         return
@@ -273,8 +307,40 @@ def _apply_transaction(holdings, txn, tickers_by_item_id: dict[str, str], revers
         holdings[key] = holdings.get(key, 0.0) + direction * txn.quantity * txn.price
         return
 
-    key = _normalize_cash_ticker(ticker)
+    key = _normalize_ticker(ticker)
     holdings[key] = holdings.get(key, 0.0) + direction * txn.quantity
+
+
+# --- Valuation helpers --------------------------------------------------------
+
+
+def _latest_intraday_value(
+    current_holdings: dict[str, float],
+    intraday_prices: dict[str, dict[datetime, float]],
+    daily_prices: dict[str, dict[date, float]],
+    now: datetime,
+) -> float | None:
+    """Value current holdings with intraday prices, falling back to daily prices."""
+    if not any(intraday_prices.values()):
+        return None
+
+    intraday_prices = _normalize_intraday_prices(intraday_prices)
+    return _calculate_value(
+        current_holdings,
+        intraday_prices,
+        _build_price_indexes(intraday_prices),
+        now,
+        fallback_price_history=daily_prices,
+        fallback_price_indexes=_build_price_indexes(daily_prices),
+    )
+
+
+def _normalize_intraday_prices(intraday_prices: dict[str, dict[datetime, float]]) -> dict[str, dict[datetime, float]]:
+    """Normalize intraday price timestamps to naive UTC for comparisons."""
+    return {
+        ticker: {_to_naive_utc(timestamp): price for timestamp, price in ticker_prices.items()}
+        for ticker, ticker_prices in intraday_prices.items()
+    }
 
 
 def _calculate_value(
@@ -285,6 +351,7 @@ def _calculate_value(
     fallback_price_history=None,
     fallback_price_indexes=None,
 ) -> float:
+    """Value a holdings snapshot using the latest price at or before the target."""
     total = holdings.get(CASH_TICKER, 0.0)
     fallback_date = target.date() if hasattr(target, 'date') else target
 
@@ -307,10 +374,12 @@ def _calculate_value(
 
 
 def _build_price_indexes(price_history) -> dict:
+    """Pre-sort price history keys so valuation can use binary search lookups."""
     return {ticker: sorted(prices.keys()) for ticker, prices in price_history.items()}
 
 
 def _latest_price_on_or_before(price_map, sorted_keys, target):
+    """Return the latest known price at or before the target date or timestamp."""
     index = bisect_right(sorted_keys, target) - 1
     if index < 0:
         return None
