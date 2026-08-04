@@ -48,10 +48,26 @@ function AllocationTooltip({ active, payload }) {
   )
 }
 
+/**
+ * Sits at the far end of each slice's leader line. Recharts hands us that endpoint (`x`/`y`) and
+ * the matching `textAnchor`, so the text always reads outwards from its own connector.
+ */
+function AllocationSliceLabel({ x, y, textAnchor, payload }) {
+  if (!payload) return null
+  return (
+    <text x={x} y={y} textAnchor={textAnchor} dominantBaseline="central" fontSize={14}>
+      <tspan fill="var(--text-primary)" fontWeight="600">
+        {payload.percent.toFixed(1)}%
+      </tspan>
+      <tspan fill="var(--text-secondary)"> ({formatCurrency(payload.value, 0)})</tspan>
+    </text>
+  )
+}
+
 function ColorSwatch({ index }) {
   return (
     <span
-      className="inline-block h-3 w-3 shrink-0 rounded-full"
+      className="inline-block h-3.5 w-3.5 shrink-0 rounded-full"
       style={{ backgroundColor: chartColorAt(index) }}
     />
   )
@@ -106,9 +122,18 @@ function AllocationPieChart({ items }) {
         </Table>
       ) : (
         <>
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={slices} cx="50%" cy="50%" outerRadius={78} dataKey="value" labelLine={false}>
+          {/* Roomier than the slices alone need: the labels and their leader lines sit outside
+              the pie, so the radius stays small enough to keep them inside the card. */}
+          <ResponsiveContainer width="100%" height={260}>
+            <PieChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+              <Pie
+                data={slices}
+                cx="50%"
+                cy="50%"
+                outerRadius={52}
+                dataKey="value"
+                label={<AllocationSliceLabel />}
+              >
                 {slices.map((slice, index) => (
                   <Cell key={slice.assetType} fill={chartColorAt(index)} />
                 ))}
@@ -117,14 +142,11 @@ function AllocationPieChart({ items }) {
             </PieChart>
           </ResponsiveContainer>
 
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+          <div className="mt-2 flex flex-wrap gap-3">
             {slices.map((slice, index) => (
-              <div key={slice.assetType} className="flex items-center gap-2 text-sm">
+              <div key={slice.assetType} className="flex items-center gap-2 text-base">
                 <ColorSwatch index={index} />
                 <span className="text-[var(--text-secondary)]">{slice.name}</span>
-                <span className="font-semibold text-[var(--text-primary)]">
-                  {slice.percent.toFixed(1)}% ({formatCurrency(slice.value, 0)})
-                </span>
               </div>
             ))}
           </div>

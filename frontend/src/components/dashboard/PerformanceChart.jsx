@@ -74,13 +74,13 @@ function PerformanceTooltip({ active, payload }) {
   if (!active || !payload?.length) return null
   return (
     <div className="rounded border border-[var(--border)] bg-[var(--surface-1)] p-2 shadow-[var(--shadow-lg)]">
-      <p className="text-xs font-semibold text-[var(--text-primary)]">{payload[0].payload.date}</p>
-      <p className="text-xs text-[var(--primary)]">{formatCurrency(payload[0].value)}</p>
+      <p className="text-sm font-semibold text-[var(--text-primary)]">{payload[0].payload.date}</p>
+      <p className="text-sm text-[var(--primary)]">{formatCurrency(payload[0].value)}</p>
     </div>
   )
 }
 
-const AXIS_TICK = { fontSize: 12, fill: 'var(--text-secondary)' }
+const AXIS_TICK = { fontSize: 14, fill: 'var(--text-secondary)' }
 
 function PerformanceChart({ data, timeRange, onTimeRangeChange }) {
   const isIntraday = timeRange === INTRADAY_RANGE
