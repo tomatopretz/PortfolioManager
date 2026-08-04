@@ -106,14 +106,16 @@ function DeleteAssetModal({ isOpen, onClose, onSubmit }) {
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-secondary)]">
               New Transaction
             </p>
-            <h2 className="mt-1 text-2xl font-bold text-[var(--text-primary)]">Sell Asset</h2>
+            <h2 className="mt-1 text-2xl font-bold text-[var(--text-primary)]">
+              {isCashAsset ? 'Withdraw Cash' : 'Sell Asset'}
+            </h2>
           </div>
 
           <button
             type="button"
             onClick={handleClose}
             className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] p-2 text-[var(--text-secondary)] hover:bg-[var(--surface-3)]"
-            aria-label="Close sell asset form"
+            aria-label={isCashAsset ? 'Close withdraw cash form' : 'Close sell asset form'}
           >
             ✕
           </button>
@@ -242,7 +244,7 @@ function DeleteAssetModal({ isOpen, onClose, onSubmit }) {
               disabled={submitting}
               className="rounded-lg bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--primary-dark)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {submitting ? 'Saving...' : 'Sell Asset'}
+              {submitting ? 'Saving...' : isCashAsset ? 'Withdraw' : 'Sell Asset'}
             </button>
           </div>
         </form>

@@ -108,14 +108,16 @@ function AddAssetModal({ isOpen, onClose, onSubmit }) {
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-secondary)]">
               New Transaction
             </p>
-            <h2 className="mt-1 text-2xl font-bold text-[var(--text-primary)]">Add Asset</h2>
+            <h2 className="mt-1 text-2xl font-bold text-[var(--text-primary)]">
+              {isCashAsset ? 'Deposit Cash' : 'Add Asset'}
+            </h2>
           </div>
 
           <button
             type="button"
             onClick={handleClose}
             className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] p-2 text-[var(--text-secondary)] hover:bg-[var(--surface-3)]"
-            aria-label="Close add asset form"
+            aria-label={isCashAsset ? 'Close deposit cash form' : 'Close add asset form'}
           >
             ✕
           </button>
@@ -159,7 +161,7 @@ function AddAssetModal({ isOpen, onClose, onSubmit }) {
           {isCashAsset ? (
             <div>
               <label htmlFor="amount" className="mb-2 block text-sm font-medium text-[var(--text-primary)]">
-                Amount
+                Deposit Amount
               </label>
               <input
                 id="amount"
@@ -259,7 +261,7 @@ function AddAssetModal({ isOpen, onClose, onSubmit }) {
               disabled={submitting}
               className="rounded-lg bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--primary-dark)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {submitting ? 'Saving...' : 'Add Asset'}
+              {submitting ? 'Saving...' : isCashAsset ? 'Deposit' : 'Add Asset'}
             </button>
           </div>
         </form>
