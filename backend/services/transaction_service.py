@@ -31,9 +31,11 @@ def _is_cash(request: RecordTransactionRequestDTO) -> bool:
 
 def _record_cash_movement(
     cash_id: str, movement_type: Literal['buy', 'sell'], amount: float, date: datetime, conn: Connection,
+    useCash: bool = False,
 ) -> TransactionDTO:
     """Insert a Transaction row for a change to the CASH item's balance - covers direct
-    deposits/withdrawals, and the cash side of a stock/bond buy or sell."""
+    deposits/withdrawals (useCash=False, the default) and the cash side of a stock/bond buy
+    or sell (useCash=True: this movement only happened because a trade caused it)."""
     return TransactionRepository.add(
         TransactionDTO(
             portfolioItemId=cash_id,
@@ -41,7 +43,7 @@ def _record_cash_movement(
             quantity=amount,
             price=1,
             date=date,
-            useCash=False,
+            useCash=useCash,
         ),
         conn=conn,
     )
@@ -89,7 +91,7 @@ def _buy_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Conne
         cash.quantity = round_money(cash.quantity - cost)
         cash.costBasis = round_money(cash.costBasis - cost)  # cash costBasis always mirrors quantity 1:1
         PortfolioItemRepository.update(cash, conn=conn)
-        _record_cash_movement(cash.id, 'sell', cost, date, conn)
+        _record_cash_movement(cash.id, 'sell', cost, date, conn, useCash=True)
 
     item = PortfolioItemRepository.get_by_ticker_and_asset_type(
         request.ticker, request.assetType, conn=conn, for_update=True,
@@ -163,7 +165,7 @@ def _sell_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Conn
     cash.quantity = round_money(cash.quantity + proceeds)
     cash.costBasis = round_money(cash.costBasis + proceeds)  # cash costBasis always mirrors quantity 1:1
     PortfolioItemRepository.update(cash, conn=conn)
-    _record_cash_movement(cash.id, 'buy', proceeds, date, conn)
+    _record_cash_movement(cash.id, 'buy', proceeds, date, conn, useCash=True)
 
     cost_basis_per_share = item.costBasis / item.quantity
     new_quantity = round_money(item.quantity - request.quantity)
