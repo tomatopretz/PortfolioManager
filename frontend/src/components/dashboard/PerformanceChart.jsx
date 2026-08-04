@@ -15,7 +15,9 @@ const formatHourTick = (timestamp) => {
   return `${displayHour}${hour >= 12 ? 'pm' : 'am'}`
 }
 
-/** One tick on every whole hour covered by the intraday series. */
+const INTRADAY_TICK_HOURS = 2
+
+/** One tick every other whole hour covered by the intraday series. */
 const buildHourlyTicks = (points) => {
   if (points.length === 0) return []
   const timestamps = points.map((point) => point.timestamp)
@@ -29,7 +31,7 @@ const buildHourlyTicks = (points) => {
   const ticks = []
   while (cursor.getTime() <= max) {
     ticks.push(cursor.getTime())
-    cursor.setHours(cursor.getHours() + 1)
+    cursor.setHours(cursor.getHours() + INTRADAY_TICK_HOURS)
   }
   return ticks
 }
