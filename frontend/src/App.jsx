@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom'
 import { PortfolioProvider } from './context/PortfolioContext'
 import AppLayout from './components/layout/AppLayout'
 import DashboardPage from './pages/DashboardPage'
@@ -14,6 +14,7 @@ function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/holdings" element={<HoldingsPage />} />
             <Route path="/transactions" element={<TransactionHistoryPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
       </Router>

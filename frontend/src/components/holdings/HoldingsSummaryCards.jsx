@@ -1,107 +1,66 @@
+import Card from '../common/Card'
 import StatTile from '../common/StatTile'
-import { formatCurrency } from '../../utils/format'
+import {
+  formatCurrency,
+  formatPercent,
+  formatSignedCurrencyOrNA,
+  formatSignedPercentOrNA,
+} from '../../utils/format'
+import { extremeBy, isCashItem, toneClass } from '../../utils/portfolio'
 
-const bestBy = (items, key) =>
-  items.reduce((best, item) => ((item[key] ?? -Infinity) > (best?.[key] ?? -Infinity) ? item : best), null)
+// label + which metric decides the winner + how that metric reads on the card.
+const CARDS = [
+  { label: 'Largest Position', key: 'marketValue', mode: 'max', metric: 'share' },
+  { label: 'Top Earner ($)', key: 'gainLoss', mode: 'max', metric: 'currency' },
+  { label: 'Top Earner (%)', key: 'gainLossPercent', mode: 'max', metric: 'percent' },
+  { label: 'Worst Earner ($)', key: 'gainLoss', mode: 'min', metric: 'currency' },
+  { label: 'Worst Earner (%)', key: 'gainLossPercent', mode: 'min', metric: 'percent' },
+]
 
-const worstBy = (items, key) =>
-  items.reduce((worst, item) => ((item[key] ?? Infinity) < (worst?.[key] ?? Infinity) ? item : worst), null)
-
-function PositionCard({ label, item, metricText, metricColor }) {
+function PositionCard({ label, ticker, metricText, metricTone }) {
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-5 transition-all duration-200 hover:border-[var(--primary)] hover:shadow-[var(--shadow-md)]">
+    <Card padding="p-5" interactive>
       <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
         {label}
       </p>
-      <p className="mb-2 text-2xl font-bold text-[var(--text-primary)]">
-        {item ? item.ticker : '—'}
-      </p>
-      {metricText && (
-        <p className={`text-sm font-semibold ${metricColor}`}>
-          {metricText}
-        </p>
-      )}
-    </div>
+      <p className="mb-2 text-2xl font-bold text-[var(--text-primary)]">{ticker ?? '—'}</p>
+      {metricText && <p className={`text-sm font-semibold ${metricTone}`}>{metricText}</p>}
+    </Card>
   )
 }
 
 function HoldingsSummaryCards({ items, totalValue }) {
-  const nonCash = items.filter((item) => String(item.assetType || '').toLowerCase() !== 'cash')
+  const nonCash = items.filter((item) => !isCashItem(item))
 
-  const largestPosition = bestBy(nonCash, 'marketValue')
-  const topEarnerDollar = bestBy(nonCash, 'gainLoss')
-  const topEarnerPercent = bestBy(nonCash, 'gainLossPercent')
-  const worstEarnerDollar = worstBy(nonCash, 'gainLoss')
-  const worstEarnerPercent = worstBy(nonCash, 'gainLossPercent')
-  const largestPositionPercent =
-    largestPosition && totalValue > 0 ? ((largestPosition.marketValue ?? 0) / totalValue) * 100 : 0
+  const describe = ({ key, mode, metric }) => {
+    const item = extremeBy(nonCash, key, mode)
+    if (!item) return { ticker: null, metricText: null, metricTone: '' }
+
+    if (metric === 'share') {
+      const share = totalValue > 0 ? ((item.marketValue ?? 0) / totalValue) * 100 : 0
+      return {
+        ticker: item.ticker,
+        metricText: `${formatCurrency(item.marketValue)} (${formatPercent(share)} of portfolio)`,
+        metricTone: 'text-[var(--text-secondary)]',
+      }
+    }
+
+    const value = item[key]
+    return {
+      ticker: item.ticker,
+      metricText:
+        metric === 'currency'
+          ? formatSignedCurrencyOrNA(value)
+          : formatSignedPercentOrNA(value),
+      metricTone: toneClass(value),
+    }
+  }
 
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-      <PositionCard
-        label="Largest Position"
-        item={largestPosition}
-        metricColor="text-[var(--text-secondary)]"
-        metricText={
-          largestPosition &&
-          `${formatCurrency(largestPosition.marketValue)} (${largestPositionPercent.toFixed(2)}% of portfolio)`
-        }
-      />
-
-      <PositionCard
-        label="Top Earner ($)"
-        item={topEarnerDollar}
-        metricColor={
-          topEarnerDollar && topEarnerDollar.gainLoss >= 0
-            ? 'text-[var(--status-good)]'
-            : 'text-[var(--status-serious)]'
-        }
-        metricText={
-          topEarnerDollar && `${topEarnerDollar.gainLoss >= 0 ? '+' : ''}${formatCurrency(topEarnerDollar.gainLoss)}`
-        }
-      />
-
-      <PositionCard
-        label="Top Earner (%)"
-        item={topEarnerPercent}
-        metricColor={
-          topEarnerPercent && topEarnerPercent.gainLossPercent >= 0
-            ? 'text-[var(--status-good)]'
-            : 'text-[var(--status-serious)]'
-        }
-        metricText={
-          topEarnerPercent &&
-          `${topEarnerPercent.gainLossPercent >= 0 ? '+' : ''}${topEarnerPercent.gainLossPercent.toFixed(2)}%`
-        }
-      />
-
-      <PositionCard
-        label="Worst Earner ($)"
-        item={worstEarnerDollar}
-        metricColor={
-          worstEarnerDollar && worstEarnerDollar.gainLoss >= 0
-            ? 'text-[var(--status-good)]'
-            : 'text-[var(--status-serious)]'
-        }
-        metricText={
-          worstEarnerDollar && `${worstEarnerDollar.gainLoss >= 0 ? '+' : ''}${formatCurrency(worstEarnerDollar.gainLoss)}`
-        }
-      />
-
-      <PositionCard
-        label="Worst Earner (%)"
-        item={worstEarnerPercent}
-        metricColor={
-          worstEarnerPercent && worstEarnerPercent.gainLossPercent >= 0
-            ? 'text-[var(--status-good)]'
-            : 'text-[var(--status-serious)]'
-        }
-        metricText={
-          worstEarnerPercent &&
-          `${worstEarnerPercent.gainLossPercent >= 0 ? '+' : ''}${worstEarnerPercent.gainLossPercent.toFixed(2)}%`
-        }
-      />
-
+      {CARDS.map((card) => (
+        <PositionCard key={card.label} label={card.label} {...describe(card)} />
+      ))}
       <StatTile label="Total Market Value" value={totalValue} />
     </div>
   )
