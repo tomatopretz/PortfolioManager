@@ -84,6 +84,11 @@ export const sellAsset = async (payload) => {
   return response;
 };
 
+export const getTransactions = async () => {
+  const response = await get('/api/transactions');
+  return response || [];
+};
+
 export const toggleFavourite = async (ticker, assetType) => {
   const response = await patch(`/api/portfolio/${encodeURIComponent(ticker)}/${encodeURIComponent(assetType)}/favourite`);
   return enrichItem(response);
@@ -95,5 +100,6 @@ export default {
   getCurrentPrices,
   buyAsset,
   sellAsset,
+  getTransactions,
   toggleFavourite,
 };
