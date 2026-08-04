@@ -2,8 +2,8 @@ import StatTile from '../common/StatTile'
 
 function TransactionSummaryCards({ transactions }) {
   const totalCount = transactions.length
-  const buyCount = transactions.filter((t) => t.type === 'buy').length
-  const sellCount = transactions.filter((t) => t.type === 'sell').length
+  const buyCount = transactions.filter((t) => t.action === 'buy').length
+  const sellCount = transactions.filter((t) => t.action === 'sell').length
 
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-3">

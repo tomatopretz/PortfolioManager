@@ -22,12 +22,51 @@ const columns = [
   { key: 'date', label: 'Date' },
   { key: 'ticker', label: 'Ticker' },
   { key: 'assetType', label: 'Type' },
-  { key: 'type', label: 'Action' },
+  { key: 'action', label: 'Action' },
   { key: 'quantity', label: 'Quantity', align: 'right' },
   { key: 'price', label: 'Price', align: 'right' },
   { key: 'total', label: 'Total', align: 'right' },
   { key: 'useCash', label: 'Cash Used', align: 'right' },
 ]
+
+const actionLabels = {
+  buy: 'Buy',
+  sell: 'Sell',
+  deposit: 'Deposit',
+  withdrawal: 'Withdrawal',
+}
+
+// A buy/sell of a non-cash asset that used cash records a second, auto-generated Transaction
+// row against the CASH item (opposite type, same date, amount = quantity * price) so the CASH
+// balance stays in sync. That row isn't a distinct user action - it's collapsed into the asset
+// row it belongs to so buy/sell counts reflect actual trades. Cash rows that don't pair up with
+// an asset trade are real deposits/withdrawals and are kept, just labeled accordingly.
+const collapseCashLegs = (enrichedTransactions) => {
+  const assetTxs = enrichedTransactions.filter((t) => t.assetType !== 'cash')
+  const cashTxs = enrichedTransactions.filter((t) => t.assetType === 'cash')
+  const mergedCashIds = new Set()
+
+  assetTxs.forEach((t) => {
+    if (!t.useCash) return
+    const expectedCashType = t.type === 'buy' ? 'sell' : 'buy'
+    const match = cashTxs.find((c) => (
+      !mergedCashIds.has(c.id) &&
+      c.type === expectedCashType &&
+      new Date(c.date).getTime() === new Date(t.date).getTime() &&
+      Math.abs(c.quantity - t.total) < 0.01
+    ))
+    if (match) mergedCashIds.add(match.id)
+  })
+
+  return enrichedTransactions
+    .filter((t) => !mergedCashIds.has(t.id))
+    .map((t) => {
+      if (t.assetType === 'cash') {
+        return { ...t, action: t.type === 'buy' ? 'deposit' : 'withdrawal' }
+      }
+      return { ...t, action: t.type }
+    })
+}
 
 const compareValues = (a, b, key) => {
   if (key === 'date') {
@@ -75,7 +114,7 @@ function TransactionHistoryPage() {
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items])
 
   const enrichedTransactions = useMemo(() => {
-    return transactions.map((t) => {
+    const withTotals = transactions.map((t) => {
       const relatedItem = itemById.get(t.portfolioItemId)
       return {
         ...t,
@@ -84,6 +123,7 @@ function TransactionHistoryPage() {
         total: Number(t.quantity ?? 0) * Number(t.price ?? 0),
       }
     })
+    return collapseCashLegs(withTotals)
   }, [transactions, itemById])
 
   if (loading && transactions.length === 0) {
@@ -132,7 +172,7 @@ function TransactionHistoryPage() {
 
   const normalizedSearch = search.trim().toLowerCase()
   const filteredTransactions = enrichedTransactions.filter((t) => {
-    const matchesType = typeFilter === 'all' || t.type === typeFilter
+    const matchesType = typeFilter === 'all' || t.action === typeFilter
     const matchesSearch = normalizedSearch === '' || t.ticker.toLowerCase().includes(normalizedSearch)
     return matchesType && matchesSearch
   })
@@ -158,8 +198,8 @@ function TransactionHistoryPage() {
             className="w-full max-w-xs rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-4 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--primary)] focus:outline-none"
           />
 
-          <div className="flex w-fit gap-2 rounded-lg bg-[var(--surface-2)] p-1">
-            {['all', 'buy', 'sell'].map((type) => (
+          <div className="flex w-fit flex-wrap gap-2 rounded-lg bg-[var(--surface-2)] p-1">
+            {['all', 'buy', 'sell', 'deposit', 'withdrawal'].map((type) => (
               <button
                 key={type}
                 onClick={() => setTypeFilter(type)}
@@ -169,7 +209,7 @@ function TransactionHistoryPage() {
                     : 'text-[var(--text-secondary)] hover:bg-[var(--surface-3)] hover:text-[var(--text-primary)]'
                 }`}
               >
-                {type === 'all' ? 'All' : capitalize(type)}
+                {type === 'all' ? 'All' : actionLabels[type]}
               </button>
             ))}
           </div>
@@ -200,7 +240,9 @@ function TransactionHistoryPage() {
               </thead>
               <tbody>
                 {rows.map((t) => {
-                  const typeColor = t.type === 'buy' ? 'text-[var(--status-good)]' : 'text-[var(--status-serious)]'
+                  const typeColor = t.action === 'buy' || t.action === 'deposit'
+                    ? 'text-[var(--status-good)]'
+                    : 'text-[var(--status-serious)]'
 
                   return (
                     <tr
@@ -217,7 +259,7 @@ function TransactionHistoryPage() {
                         {capitalize(t.assetType)}
                       </td>
                       <td className={`px-4 py-4 font-semibold ${typeColor}`}>
-                        {capitalize(t.type)}
+                        {actionLabels[t.action] ?? capitalize(t.action)}
                       </td>
                       <td className="px-4 py-4 text-right text-[var(--text-secondary)]">
                         {Number(t.quantity ?? 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}
