@@ -38,6 +38,13 @@ export const formatDate = (value) => {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
+export const formatTime = (value) => {
+  if (!value) return EM_DASH
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return EM_DASH
+  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
 export const capitalize = (value) => {
   const text = String(value ?? '')
   return text.charAt(0).toUpperCase() + text.slice(1)
