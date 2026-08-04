@@ -6,7 +6,10 @@ import { formatTime } from '../../utils/format'
 const REFRESH_ICON =
   'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'
 
-const DELAY_NOTE = 'Yahoo Finance quotes are typically delayed by around 15 minutes.'
+// Deliberately unquantified: the lag is Yahoo's, it varies by exchange, and nothing in the
+// response states it - so naming a specific number in the UI would be a guess presented as fact.
+const DELAY_NOTE =
+  "Prices come from Yahoo Finance's free feed, which lags the market. How far behind depends on the exchange."
 
 /**
  * Re-fetches holdings and the value history on demand.
@@ -29,7 +32,7 @@ function RefreshButton() {
           <p className="text-[var(--text-secondary)]">Updated {formatTime(pricesUpdatedAt)}</p>
         )}
         <p className="text-[var(--text-muted)]" title={DELAY_NOTE}>
-          Delayed ~15 min
+          Delayed quotes
         </p>
       </div>
 
