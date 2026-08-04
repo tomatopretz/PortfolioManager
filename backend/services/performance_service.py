@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from models.PerformanceHistoryResultDTO import PerformanceHistoryResultDTO
 from models.PerformancePointDTO import PerformancePointDTO
 from services import price_service
-from services.portfolio_item_service import PortfolioItemService
+from services.portfolio_service import PortfolioService
 from services.transaction_service import TransactionService
 
 CASH_TICKER = 'USD'
@@ -122,13 +122,13 @@ def _value_from_current_prices(holdings: dict[str, float]) -> float:
 
 
 def _load_tickers_by_portfolio_item_id() -> dict[str, str]:
-    items = PortfolioItemService.list_portfolio_items()
+    items = PortfolioService.list_portfolio_items()
     return {item.id: (_normalize_cash_ticker(item.ticker) if item.ticker else '') for item in items if item.id}
 
 
 def _current_holdings_snapshot() -> dict[str, float]:
     holdings = defaultdict(float)
-    for item in PortfolioItemService.list_portfolio_items():
+    for item in PortfolioService.list_portfolio_items():
         if item is None or not item.id:
             continue
 
@@ -154,7 +154,7 @@ def _is_cash_ticker(ticker: str | None) -> bool:
 def _priced_tickers(transactions, tickers_by_item_id: dict[str, str]) -> list[str]:
     item_tickers = {
         _normalize_cash_ticker(item.ticker)
-        for item in PortfolioItemService.list_portfolio_items()
+        for item in PortfolioService.list_portfolio_items()
         if item and item.ticker and not _is_cash_ticker(item.ticker)
     }
     transaction_tickers = {

@@ -3,24 +3,16 @@ from typing import Optional
 from models.PortfolioItemDTO import PortfolioItemDTO
 from models.PortfolioItemResultDTO import PortfolioItemResultDTO
 from models.RecordTransactionRequestDTO import CASH_ASSET_TYPE
+from repository.portfolio_item_repository import PortfolioItemRepository
 from services import price_service
-from services.portfolio_item_service import PortfolioItemService
 from utils.rounding import round_money
-
-
-def _get_current_price(item: PortfolioItemDTO) -> Optional[float]:
-    if item.assetType == CASH_ASSET_TYPE:
-        return None
-    return price_service.list_current_prices([item.ticker]).get(item.ticker)
 
 
 def _to_result_dto(item: PortfolioItemDTO, current_price: Optional[float]) -> PortfolioItemResultDTO:
     """Compute currentPrice/marketValue/unrealizedPnL for one item.
 
     CASH has no price concept: currentPrice/unrealizedPnL stay None, but marketValue is just
-    the quantity (1 unit of cash is worth 1 dollar, always at par). A ticker yfinance can't
-    price gets currentPrice/marketValue/unrealizedPnL left as None (stale/unavailable) rather
-    than failing the whole request.
+    the quantity (1 unit of cash is worth 1 dollar, always at par). 
     """
     is_cash = item.assetType == CASH_ASSET_TYPE
     if is_cash:
@@ -44,15 +36,71 @@ def _to_result_dto(item: PortfolioItemDTO, current_price: Optional[float]) -> Po
 
 
 class PortfolioService:
-    """Business logic for viewing the portfolio as a whole (holdings + live pricing)."""
+    """Business logic for portfolio items 
+
+    - Get_enriched_portfolio() / get_enriched_portfolio_item() are the only two entry points that add live pricing
+    (currentPrice/marketValue/unrealizedPnL)
+    - Every other method here is raw data access with no pricing involved
+    """
+
+    # --- raw CRUD on a single PortfolioItem - no live pricing, never calls price_service -----
 
     @staticmethod
-    def get_portfolio() -> list[PortfolioItemResultDTO]:
+    def get_portfolio_item_by_id(item_id: str) -> Optional[PortfolioItemDTO]:
+        """Get a single portfolio item by id."""
+        return PortfolioItemRepository.get(item_id)
+
+    @staticmethod
+    def get_portfolio_item_by_ticker(ticker: str) -> Optional[PortfolioItemDTO]:
+        """Get a single portfolio item by ticker."""
+        return PortfolioItemRepository.get_by_ticker(ticker.upper())
+
+    @staticmethod
+    def get_portfolio_item_by_ticker_and_asset_type(ticker: str, asset_type: str) -> Optional[PortfolioItemDTO]:
+        """Get a single portfolio item by its natural key (ticker + assetType)."""
+        return PortfolioItemRepository.get_by_ticker_and_asset_type(ticker.upper(), asset_type.upper())
+
+    @staticmethod
+    def list_portfolio_items() -> list[PortfolioItemDTO]:
+        """List all portfolio items (current holdings)."""
+        return PortfolioItemRepository.list_all()
+
+    @staticmethod
+    def add_portfolio_item(item: PortfolioItemDTO) -> PortfolioItemDTO:
+        """Create a new portfolio item."""
+        return PortfolioItemRepository.add(item)
+
+    @staticmethod
+    def update_portfolio_item(item: PortfolioItemDTO) -> PortfolioItemDTO:
+        """Update an existing portfolio item."""
+        return PortfolioItemRepository.update(item)
+
+    @staticmethod
+    def delete_portfolio_item(item_id: str) -> None:
+        """Delete a portfolio item."""
+        PortfolioItemRepository.delete(item_id)
+
+    @staticmethod
+    def toggle_favourite(ticker: str, asset_type: str) -> Optional[PortfolioItemDTO]:
+        """Flip isFavourite for the item at this natural key. Returns None if no such item
+        exists, otherwise the updated item."""
+        item = PortfolioService.get_portfolio_item_by_ticker_and_asset_type(ticker, asset_type)
+        if item is None:
+            return None
+        new_value = not item.isFavourite
+        PortfolioItemRepository.set_favourite(item.id, new_value)
+        item.isFavourite = new_value
+        return item
+
+    # --- enriched "view" - always adds live pricing ------------------------------------------
+
+    @staticmethod
+    def get_enriched_portfolio() -> list[PortfolioItemResultDTO]:
         """List all portfolio items with computed current price, market value, and unrealized P&L.
 
         An empty portfolio returns [] rather than an error.
         """
-        items = PortfolioItemService.list_portfolio_items()
+        items = PortfolioService.list_portfolio_items()
         if not items:
             return []
 
@@ -62,19 +110,19 @@ class PortfolioService:
         return [_to_result_dto(item, prices.get(item.ticker)) for item in items]
 
     @staticmethod
-    def get_portfolio_item(ticker: str, asset_type: str) -> Optional[PortfolioItemResultDTO]:
+    def get_enriched_portfolio_item(ticker: str, asset_type: str) -> Optional[PortfolioItemResultDTO]:
         """Get a single portfolio item by its natural key (ticker + assetType), with the same
-        computed current price / market value / unrealized P&L as get_portfolio(). Returns
-        None if no such item exists."""
-        item = PortfolioItemService.get_portfolio_item_by_ticker_and_asset_type(ticker, asset_type)
+        computed current price / market value / unrealized P&L as get_enriched_portfolio().
+        Returns None if no such item exists."""
+        item = PortfolioService.get_portfolio_item_by_ticker_and_asset_type(ticker, asset_type)
         if item is None:
             return None
-        return _to_result_dto(item, _get_current_price(item))
 
-    @staticmethod
-    def toggle_favourite(ticker: str, asset_type: str) -> Optional[PortfolioItemResultDTO]:
-        """Flip isFavourite for a single portfolio item. Returns None if no such item exists."""
-        item = PortfolioItemService.toggle_favourite(ticker, asset_type)
-        if item is None:
-            return None
-        return _to_result_dto(item, _get_current_price(item))
+        current_price = None
+        if item.assetType != CASH_ASSET_TYPE:
+            try:
+                current_price = price_service.get_current_price(item.ticker)
+            except price_service.PriceNotFoundError:
+                current_price = None
+
+        return _to_result_dto(item, current_price)
