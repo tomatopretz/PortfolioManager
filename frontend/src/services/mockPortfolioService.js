@@ -1,8 +1,31 @@
-import { mockPortfolioData, mockPerformanceData, enrichHoldings } from './mockData';
+import { mockPortfolioData, mockPerformanceData, enrichHoldings, MOCK_TODAY } from './mockData';
+import { TIME_RANGES } from '../constants/portfolio';
+import { isCashItem } from '../utils/portfolio';
 
-let mockData = structuredClone(mockPortfolioData);
+const mockData = structuredClone(mockPortfolioData);
 
 const simulateLatency = () => new Promise((resolve) => setTimeout(resolve, 300));
+
+const DAY_MS = 1000 * 60 * 60 * 24;
+
+const findItem = (ticker, assetType) =>
+  mockData.items.find((item) => item.ticker === ticker && item.assetType === assetType);
+
+const findCashItem = () => mockData.items.find(isCashItem);
+
+const recordTransaction = (item, type, quantity, price, useCash) => {
+  const transaction = {
+    id: `txn-${Date.now()}`,
+    portfolioItemId: item.id,
+    type,
+    quantity,
+    price,
+    date: new Date(),
+    useCash,
+  };
+  mockData.transactions.push(transaction);
+  return { success: true, transaction };
+};
 
 export const getPortfolioItems = async () => {
   await simulateLatency();
@@ -12,88 +35,28 @@ export const getPortfolioItems = async () => {
 export const getPerformance = async (range = 'all') => {
   await simulateLatency();
 
-  const today = new Date('2026-07-28');
-  let filtered = [...mockPerformanceData];
+  const { days } = TIME_RANGES.find((entry) => entry.key === range) ?? {};
+  if (!days) return [...mockPerformanceData];
 
-  switch (range) {
-    case '1d':
-      filtered = filtered.filter((d) => {
-        const date = new Date(d.date);
-        const daysAgo = Math.floor((today - date) / (1000 * 60 * 60 * 24));
-        return daysAgo <= 1;
-      });
-      break;
-    case '1w':
-      filtered = filtered.filter((d) => {
-        const date = new Date(d.date);
-        const daysAgo = Math.floor((today - date) / (1000 * 60 * 60 * 24));
-        return daysAgo <= 7;
-      });
-      break;
-    case '1m':
-      filtered = filtered.filter((d) => {
-        const date = new Date(d.date);
-        const daysAgo = Math.floor((today - date) / (1000 * 60 * 60 * 24));
-        return daysAgo <= 30;
-      });
-      break;
-    case '6m':
-      filtered = filtered.filter((d) => {
-        const date = new Date(d.date);
-        const daysAgo = Math.floor((today - date) / (1000 * 60 * 60 * 24));
-        return daysAgo <= 180;
-      });
-      break;
-    case '1y':
-      filtered = filtered.filter((d) => {
-        const date = new Date(d.date);
-        const daysAgo = Math.floor((today - date) / (1000 * 60 * 60 * 24));
-        return daysAgo <= 365;
-      });
-      break;
-    case 'all':
-    default:
-      break;
-  }
-
-  return filtered;
+  return mockPerformanceData.filter(
+    (point) => Math.floor((MOCK_TODAY - new Date(point.date)) / DAY_MS) <= days
+  );
 };
 
-export const getCurrentPrices = async (tickers) => {
+export const buyAsset = async ({ ticker, assetType, quantity, price, useCash }) => {
   await simulateLatency();
 
-  const prices = {};
-  if (tickers && Array.isArray(tickers)) {
-    tickers.forEach((ticker) => {
-      const item = mockData.items.find((i) => i.ticker === ticker);
-      if (item) {
-        prices[ticker] = item.currentPrice;
-      }
-    });
-  }
-  return prices;
-};
-
-export const buyAsset = async (payload) => {
-  await simulateLatency();
-
-  const { ticker, assetType, quantity, price, useCash } = payload;
+  const cost = quantity * price;
 
   if (useCash) {
-    const cashItem = mockData.items.find((i) => i.ticker === 'CASH');
-    const cost = quantity * price;
-    if (cashItem && cashItem.quantity < cost) {
-      throw new Error('Insufficient cash balance');
-    }
+    const cashItem = findCashItem();
     if (cashItem) {
+      if (cashItem.quantity < cost) throw new Error('Insufficient cash balance');
       cashItem.quantity -= cost;
     }
   }
 
-  let item = mockData.items.find(
-    (i) => i.ticker === ticker && i.assetType === assetType
-  );
-
+  let item = findItem(ticker, assetType);
   if (!item) {
     item = {
       id: `item-${Date.now()}`,
@@ -103,50 +66,33 @@ export const buyAsset = async (payload) => {
       costBasis: 0,
       currentPrice: price,
       lastUpdated: new Date(),
+      isFavourite: false,
     };
     mockData.items.push(item);
   }
 
-  const cost = quantity * price;
   item.quantity += quantity;
   item.costBasis += cost;
   item.currentPrice = price;
 
   mockData.items = enrichHoldings(mockData.items);
 
-  const transaction = {
-    id: `txn-${Date.now()}`,
-    portfolioItemId: item.id,
-    type: 'buy',
-    quantity,
-    price,
-    date: new Date(),
-    useCash,
-  };
-  mockData.transactions.push(transaction);
-
-  return { success: true, transaction };
+  return recordTransaction(item, 'buy', quantity, price, useCash);
 };
 
-export const sellAsset = async (payload) => {
+export const sellAsset = async ({ ticker, assetType, quantity, price }) => {
   await simulateLatency();
 
-  const { ticker, quantity, price } = payload;
-
-  const item = mockData.items.find((i) => i.ticker === ticker);
-  if (!item) {
-    throw new Error(`Item not found: ${ticker}`);
-  }
+  const item = findItem(ticker, assetType);
+  if (!item) throw new Error(`Item not found: ${ticker}`);
   if (item.quantity < quantity) {
     throw new Error(`Insufficient quantity to sell. Held: ${item.quantity}`);
   }
 
-  const proceeds = quantity * price;
-  const cashItem = mockData.items.find((i) => i.ticker === 'CASH');
-  if (cashItem) {
-    cashItem.quantity += proceeds;
-  }
+  const cashItem = findCashItem();
+  if (cashItem) cashItem.quantity += quantity * price;
 
+  // Average-cost basis: selling removes the proportional share of the cost, not the proceeds.
   const costPerShare = item.costBasis / item.quantity;
   item.quantity -= quantity;
   item.costBasis -= costPerShare * quantity;
@@ -157,44 +103,18 @@ export const sellAsset = async (payload) => {
 
   mockData.items = enrichHoldings(mockData.items);
 
-  const transaction = {
-    id: `txn-${Date.now()}`,
-    portfolioItemId: item.id,
-    type: 'sell',
-    quantity,
-    price,
-    date: new Date(),
-    useCash: true,
-  };
-  mockData.transactions.push(transaction);
-
-  return { success: true, transaction };
+  return recordTransaction(item, 'sell', quantity, price, true);
 };
 
 export const toggleFavourite = async (ticker, assetType) => {
   await simulateLatency();
 
-  const item = mockData.items.find(
-    (i) => i.ticker === ticker && i.assetType === assetType
-  );
-  if (!item) {
-    throw new Error(`Item not found: ${ticker} (${assetType})`);
-  }
-  if (item.assetType === 'cash' && !item.isFavourite) {
-    throw new Error('CASH cannot be favourited');
-  }
+  const item = findItem(ticker, assetType);
+  if (!item) throw new Error(`Item not found: ${ticker} (${assetType})`);
+  if (isCashItem(item) && !item.isFavourite) throw new Error('CASH cannot be favourited');
 
   item.isFavourite = !item.isFavourite;
   mockData.items = enrichHoldings(mockData.items);
 
-  return mockData.items.find((i) => i.ticker === ticker && i.assetType === assetType);
-};
-
-export default {
-  getPortfolioItems,
-  getPerformance,
-  getCurrentPrices,
-  buyAsset,
-  sellAsset,
-  toggleFavourite,
+  return findItem(ticker, assetType);
 };

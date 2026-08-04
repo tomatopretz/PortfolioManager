@@ -1,33 +1,36 @@
-import { formatCurrency } from '../../utils/format'
+import Card from './Card'
+import { formatCurrency, formatPercent } from '../../utils/format'
+import { toneClass } from '../../utils/portfolio'
+
+const FORMATTERS = {
+  currency: (value) => formatCurrency(value, 0),
+  percent: (value) => formatPercent(value),
+  text: (value) => value,
+}
 
 function StatTile({ label, value, delta, deltaPercent, format = 'currency' }) {
-  const deltaColor = delta >= 0 ? 'text-[var(--status-good)]' : 'text-[var(--status-serious)]'
-
-  const formatValue = (val) => {
-    if (format === 'currency') {
-      return formatCurrency(val, 0)
-    }
-    if (format === 'percent') {
-      return `${val.toFixed(2)}%`
-    }
-    return val
-  }
+  const formatValue = FORMATTERS[format] ?? FORMATTERS.text
+  const hasDelta = delta != null
+  const hasDeltaPercent = deltaPercent != null
+  const tone = toneClass(hasDelta ? delta : deltaPercent)
 
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-5 transition-all duration-200 hover:border-[var(--primary)] hover:shadow-[var(--shadow-md)]">
+    <Card padding="p-5" interactive>
       <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
         {label}
       </p>
-      <p className="mb-2 text-2xl font-bold text-[var(--text-primary)]">
-        {formatValue(value)}
-      </p>
-      {delta !== undefined && (
-        <p className={`text-sm font-semibold ${deltaColor}`}>
-          {delta >= 0 ? '+' : ''}{formatValue(delta)}
-          {deltaPercent !== undefined && ` (${deltaPercent >= 0 ? '+' : ''}${deltaPercent.toFixed(2)}%)`}
+      <p className="mb-2 text-2xl font-bold text-[var(--text-primary)]">{formatValue(value)}</p>
+      {(hasDelta || hasDeltaPercent) && (
+        <p className={`text-sm font-semibold ${tone}`}>
+          {hasDelta && `${delta >= 0 ? '+' : ''}${formatValue(delta)}`}
+          {hasDelta && hasDeltaPercent && ' '}
+          {hasDeltaPercent &&
+            (hasDelta
+              ? `(${deltaPercent >= 0 ? '+' : ''}${formatPercent(deltaPercent)})`
+              : `${deltaPercent >= 0 ? '+' : ''}${formatPercent(deltaPercent)}`)}
         </p>
       )}
-    </div>
+    </Card>
   )
 }
 

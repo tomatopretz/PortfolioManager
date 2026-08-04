@@ -1,164 +1,133 @@
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
-import { useState } from 'react'
-import { formatCurrency } from '../../utils/format'
+import { useMemo, useState } from 'react'
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
+import Button from '../common/Button'
+import Card from '../common/Card'
+import { Table, Tbody, Td, Th, Thead, Tr } from '../common/Table'
+import { chartColorAt } from '../../constants/portfolio'
+import { capitalize, formatCurrency } from '../../utils/format'
+import { getMarketValue, isCashItem, normalizeAssetType } from '../../utils/portfolio'
 
-const COLORS = [
-  '#3b82f6',
-  '#f97316',
-  '#10b981',
-  '#eab308',
-  '#ec4899',
-  '#22c55e',
-  '#8b5cf6',
-  '#ef4444',
-]
+/** Rolls holdings up into one slice per asset type, largest first. */
+const buildAllocation = (items) => {
+  const totalsByType = new Map()
+
+  items.forEach((item) => {
+    if (getMarketValue(item) <= 0) return
+    const key = isCashItem(item) ? 'cash' : normalizeAssetType(item.assetType) || 'other'
+    totalsByType.set(key, (totalsByType.get(key) ?? 0) + getMarketValue(item))
+  })
+
+  const slices = Array.from(totalsByType, ([assetType, value]) => ({
+    assetType,
+    name: capitalize(assetType),
+    value: Math.round(value * 100) / 100,
+  })).sort((a, b) => b.value - a.value)
+
+  const total = slices.reduce((sum, slice) => sum + slice.value, 0)
+
+  return {
+    total,
+    slices: slices.map((slice) => ({
+      ...slice,
+      percent: total > 0 ? (slice.value / total) * 100 : 0,
+    })),
+  }
+}
+
+// Declared at module scope: an inline component identity changes every render, which makes
+// recharts tear down and remount the tooltip.
+function AllocationTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null
+  const { name, value, percent } = payload[0].payload
+  return (
+    <div className="rounded border border-[var(--border)] bg-[var(--surface-1)] p-2 text-sm shadow-[var(--shadow-lg)]">
+      <p className="font-semibold text-[var(--text-primary)]">{name}</p>
+      <p className="text-[var(--text-secondary)]">{formatCurrency(value)}</p>
+      <p className="text-xs text-[var(--text-muted)]">{percent.toFixed(1)}% of portfolio</p>
+    </div>
+  )
+}
+
+function ColorSwatch({ index }) {
+  return (
+    <span
+      className="inline-block h-3 w-3 shrink-0 rounded-full"
+      style={{ backgroundColor: chartColorAt(index) }}
+    />
+  )
+}
 
 function AllocationPieChart({ items }) {
   const [showTable, setShowTable] = useState(false)
+  const { slices } = useMemo(() => buildAllocation(items), [items])
 
-  const assetTypes = {}
-  items.forEach((item) => {
-    const normalizedAssetType = String(item.assetType || '').toLowerCase()
-    const normalizedTicker = String(item.ticker || '').toUpperCase()
-    const isCash = normalizedAssetType === 'cash'
-
-    if (Number(item.marketValue ?? 0) > 0) {
-      const key = isCash ? 'Cash' : (item.assetType || normalizedTicker)
-      assetTypes[key] = (assetTypes[key] || 0) + Number(item.marketValue ?? 0)
-    }
-  })
-
-  const data = Object.entries(assetTypes).map(([type, value]) => ({
-    name: type === 'Cash' ? 'Cash' : type.charAt(0).toUpperCase() + type.slice(1),
-    value: Math.round(value * 100) / 100,
-    assetType: type,
-  }))
-
-  const total = data.reduce((sum, item) => sum + item.value, 0)
-
-  if (data.length === 0) {
+  if (slices.length === 0) {
     return (
-      <div className="flex h-96 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-8 shadow-[var(--shadow-sm)]">
-        <p className="font-semibold text-[var(--text-secondary)]">
-          No allocation data available
-        </p>
-      </div>
+      <Card padding="p-8" className="flex h-96 items-center justify-center">
+        <p className="font-semibold text-[var(--text-secondary)]">No allocation data available</p>
+      </Card>
     )
   }
 
-  const CustomTooltip = ({ active, payload }) => {
-    if (active && payload && payload.length) {
-      const entry = payload[0]
-      const percent = total > 0 ? ((entry.value / total) * 100).toFixed(1) : 0
-      return (
-        <div className="rounded border border-[var(--border)] bg-[var(--surface-1)] p-2 text-sm shadow-[var(--shadow-lg)]">
-          <p className="font-semibold text-[var(--text-primary)]">
-            {entry.name}
-          </p>
-          <p className="text-[var(--text-secondary)]">
-            {formatCurrency(entry.value)}
-          </p>
-          <p className="text-xs text-[var(--text-muted)]">
-            {percent}% of portfolio
-          </p>
-        </div>
-      )
-    }
-    return null
-  }
-
   return (
-    <div className="h-full rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-[var(--shadow-sm)]">
+    <Card className="h-full">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-lg font-bold text-[var(--text-primary)]">
-          Asset Allocation
-        </h3>
-        <button
-          onClick={() => setShowTable(!showTable)}
-          className="rounded-lg border border-[var(--primary)] bg-[var(--primary)]/10 px-4 py-2 text-xs font-semibold text-[var(--primary)] transition-all duration-200 hover:bg-[var(--primary)]/20 hover:shadow-md"
-        >
+        <h3 className="text-lg font-bold text-[var(--text-primary)]">Asset Allocation</h3>
+        <Button variant="outline" size="sm" onClick={() => setShowTable((current) => !current)}>
           {showTable ? 'Show Chart' : 'Show Table'}
-        </button>
+        </Button>
       </div>
 
-      {!showTable ? (
+      {showTable ? (
+        <Table>
+          <Thead>
+            <Th>Asset Type</Th>
+            <Th align="right">Value</Th>
+            <Th align="right">% of Portfolio</Th>
+          </Thead>
+          <Tbody>
+            {slices.map((slice, index) => (
+              <Tr key={slice.assetType}>
+                <Td>
+                  <div className="flex items-center gap-3">
+                    <ColorSwatch index={index} />
+                    <span className="text-[var(--text-primary)]">{slice.name}</span>
+                  </div>
+                </Td>
+                <Td align="right" className="font-semibold text-[var(--text-primary)]">
+                  {formatCurrency(slice.value)}
+                </Td>
+                <Td align="right" className="text-[var(--text-secondary)]">
+                  {slice.percent.toFixed(1)}%
+                </Td>
+              </Tr>
+            ))}
+          </Tbody>
+        </Table>
+      ) : (
         <>
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
-              <Pie
-                data={data}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={false}
-                outerRadius={78}
-                fill="#3b82f6"
-                dataKey="value"
-              >
-                {data.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+              <Pie data={slices} cx="50%" cy="50%" outerRadius={78} dataKey="value" labelLine={false}>
+                {slices.map((slice, index) => (
+                  <Cell key={slice.assetType} fill={chartColorAt(index)} />
                 ))}
               </Pie>
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<AllocationTooltip />} />
             </PieChart>
           </ResponsiveContainer>
 
           <div className="mt-2 flex flex-wrap gap-3">
-            {data.map((entry, index) => (
-              <div key={entry.assetType} className="flex items-center gap-2 text-sm">
-                <span
-                  className="inline-block h-3 w-3 rounded-full"
-                  style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                />
-                <span className="text-[var(--text-secondary)]">{entry.name}</span>
+            {slices.map((slice, index) => (
+              <div key={slice.assetType} className="flex items-center gap-2 text-sm">
+                <ColorSwatch index={index} />
+                <span className="text-[var(--text-secondary)]">{slice.name}</span>
               </div>
             ))}
           </div>
         </>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--border)] bg-[var(--surface-2)]">
-                <th className="px-4 py-3 text-left font-semibold text-[var(--text-secondary)]">
-                  Asset Type
-                </th>
-                <th className="px-4 py-3 text-right font-semibold text-[var(--text-secondary)]">
-                  Value
-                </th>
-                <th className="px-4 py-3 text-right font-semibold text-[var(--text-secondary)]">
-                  % of Portfolio
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((entry, index) => {
-                const percent = total > 0 ? ((entry.value / total) * 100).toFixed(1) : 0
-                return (
-                  <tr key={entry.assetType} className="border-b border-[var(--border)] transition-colors hover:bg-[var(--surface-2)]">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <span
-                          className="inline-block h-3 w-3 rounded-full"
-                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                        />
-                        <span className="text-[var(--text-primary)]">{entry.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-[var(--text-primary)]">
-                      {formatCurrency(entry.value)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-[var(--text-secondary)]">
-                      {percent}%
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
       )}
-    </div>
+    </Card>
   )
 }
 

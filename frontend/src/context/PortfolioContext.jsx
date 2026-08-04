@@ -1,8 +1,10 @@
 import { createContext, useContext } from 'react'
 import { usePortfolio } from '../hooks/usePortfolio'
 
-const PortfolioContext = createContext()
+const PortfolioContext = createContext(null)
+PortfolioContext.displayName = 'PortfolioContext'
 
+/** Reads the shared portfolio state. Throws if used outside `PortfolioProvider`. */
 export const usePortfolioContext = () => {
   const context = useContext(PortfolioContext)
   if (!context) {
@@ -11,11 +13,6 @@ export const usePortfolioContext = () => {
   return context
 }
 
-export const PortfolioProvider = ({ children }) => {
-  const portfolio = usePortfolio()
-  return (
-    <PortfolioContext.Provider value={portfolio}>
-      {children}
-    </PortfolioContext.Provider>
-  )
-}
+export const PortfolioProvider = ({ children }) => (
+  <PortfolioContext.Provider value={usePortfolio()}>{children}</PortfolioContext.Provider>
+)
