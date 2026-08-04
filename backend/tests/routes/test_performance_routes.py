@@ -18,8 +18,9 @@ def client():
         yield client
 
 
-@patch('routes.performance.PerformanceService.get_performance')
+@patch('routes.performance.PerformanceService.get_performance')  # mock: replace the service so no real DB/computation runs
 def test_get_performance_returns_history_ranges(mock_get_performance, client):
+    # Given the service returns a populated set of date ranges
     mock_get_performance.return_value = PerformanceHistoryResultDTO(
         ranges={
             '1D': [PerformancePointDTO(date='2026-07-31T09:30:00', value=1000.0)],
@@ -31,8 +32,10 @@ def test_get_performance_returns_history_ranges(mock_get_performance, client):
         }
     )
 
+    # When calling GET /api/performance
     response = client.get('/api/performance')
 
+    # Then the route returns 200 with the service's data serialized as JSON
     assert response.status_code == 200
     assert response.json == {
         'ranges': {
@@ -47,11 +50,14 @@ def test_get_performance_returns_history_ranges(mock_get_performance, client):
     mock_get_performance.assert_called_once_with()
 
 
-@patch('routes.performance.PerformanceService.get_performance')
+@patch('routes.performance.PerformanceService.get_performance')  # mock: replace the service so no real DB/computation runs
 def test_get_performance_returns_502_on_failure(mock_get_performance, client):
+    # Given the service raises an error
     mock_get_performance.side_effect = ConnectionError('database unavailable')
 
+    # When calling GET /api/performance
     response = client.get('/api/performance')
 
+    # Then the route translates the error into a 502 response
     assert response.status_code == 502
     assert response.json == {'error': 'Failed to fetch performance history: database unavailable'}

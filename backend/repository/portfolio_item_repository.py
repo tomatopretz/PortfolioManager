@@ -31,22 +31,11 @@ class PortfolioItemRepository:
             return _row_to_item(row) if row else None
 
     @staticmethod
-    def get_by_ticker(ticker: str, conn: Optional[Connection] = None) -> Optional[PortfolioItemDTO]:
-        with get_cursor(conn) as cur:
-            cur.execute(f'SELECT {_COLUMNS} FROM {TABLE} WHERE ticker = %s', (ticker,))
-            row = cur.fetchone()
-            return _row_to_item(row) if row else None
-
-    @staticmethod
     def get_by_ticker_and_asset_type(
         ticker: str, asset_type: str, conn: Optional[Connection] = None, for_update: bool = False,
     ) -> Optional[PortfolioItemDTO]:
         """`for_update=True` takes a row lock (SELECT ... FOR UPDATE), blocking any other
-        transaction trying to read-then-write the same row until this one commits or rolls
-        back. Required for read-modify-write flows (recording a transaction that adjusts this
-        item's quantity/costBasis) to avoid lost updates from overlapping requests; must be
-        called with a `conn` from an active transaction - a lock taken on an auto-committing
-        one-off connection is released immediately, defeating the point."""
+        transaction trying to read-then-write the same row until this one commits or rolls"""
         if for_update and conn is None:
             raise ValueError('for_update=True requires an explicit conn from an active transaction')
         with get_cursor(conn) as cur:
@@ -89,15 +78,9 @@ class PortfolioItemRepository:
         return item
 
     @staticmethod
-    def delete(item_id: str, conn: Optional[Connection] = None) -> None:
-        with get_cursor(conn) as cur:
-            cur.execute(f'DELETE FROM {TABLE} WHERE id = %s', (item_id,))
-
-    @staticmethod
     def set_favourite(item_id: str, is_favourite: bool, conn: Optional[Connection] = None) -> None:
         """Toggle isFavourite only - deliberately separate from update() so this never touches
-        (or risks overwriting with stale data) quantity/costBasis, which change independently
-        via the transaction-recording flow."""
+        (or risks overwriting with stale data)"""
         now = datetime.now(timezone.utc)
         with get_cursor(conn) as cur:
             cur.execute(
