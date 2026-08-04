@@ -117,11 +117,14 @@ function AllocationPieChart({ items }) {
             </PieChart>
           </ResponsiveContainer>
 
-          <div className="mt-2 flex flex-wrap gap-3">
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
             {slices.map((slice, index) => (
               <div key={slice.assetType} className="flex items-center gap-2 text-sm">
                 <ColorSwatch index={index} />
                 <span className="text-[var(--text-secondary)]">{slice.name}</span>
+                <span className="font-semibold text-[var(--text-primary)]">
+                  {slice.percent.toFixed(1)}% ({formatCurrency(slice.value, 0)})
+                </span>
               </div>
             ))}
           </div>
