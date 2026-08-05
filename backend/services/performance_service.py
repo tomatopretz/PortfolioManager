@@ -1,6 +1,7 @@
 from bisect import bisect_right
 from calendar import monthrange
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 
 from models.PerformanceHistoryResultDTO import PerformanceHistoryResultDTO
@@ -43,9 +44,19 @@ class PerformanceService:
         earliest_transaction_date = _to_naive_utc(transactions[0].date).date()
         daily_start = min(earliest_transaction_date, _daily_range_start(today, '1Y'))
 
-        daily_prices = price_service.get_daily_price_history(priced_tickers, daily_start, today)
-        intraday_prices = price_service.get_intraday_price_history(priced_tickers)
-        current_prices = price_service.list_current_prices(priced_tickers) if priced_tickers else {}
+        # Three independent yfinance round-trips - run them concurrently so the endpoint takes
+        # roughly as long as the slowest one instead of the sum of all three.
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            daily_future = executor.submit(price_service.get_daily_price_history, priced_tickers, daily_start, today)
+            intraday_future = executor.submit(price_service.get_intraday_price_history, priced_tickers)
+            # No live quote request at all when there's nothing to price (e.g. a cash-only
+            # portfolio) - same as before, just alongside the other two rather than after them.
+            current_future = executor.submit(price_service.list_current_prices, priced_tickers) if priced_tickers else None
+
+            daily_prices = daily_future.result()
+            intraday_prices = intraday_future.result()
+            current_prices = current_future.result() if current_future else {}
+
         latest_value = _latest_value(current_holdings, current_prices, intraday_prices, daily_prices, now)
 
         ranges = {
