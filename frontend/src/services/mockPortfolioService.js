@@ -32,14 +32,19 @@ export const getPortfolioItems = async () => {
   return mockData.items;
 };
 
-export const getPerformance = async (range = 'all') => {
+// Mirrors the real service: every range in one call, keyed by `TIME_RANGES` key.
+export const getPerformance = async () => {
   await simulateLatency();
 
-  const { days } = TIME_RANGES.find((entry) => entry.key === range) ?? {};
-  if (!days) return [...mockPerformanceData];
-
-  return mockPerformanceData.filter(
-    (point) => Math.floor((MOCK_TODAY - new Date(point.date)) / DAY_MS) <= days
+  return Object.fromEntries(
+    TIME_RANGES.map(({ key, days }) => [
+      key,
+      days
+        ? mockPerformanceData.filter(
+            (point) => Math.floor((MOCK_TODAY - new Date(point.date)) / DAY_MS) <= days
+          )
+        : [...mockPerformanceData],
+    ])
   );
 };
 

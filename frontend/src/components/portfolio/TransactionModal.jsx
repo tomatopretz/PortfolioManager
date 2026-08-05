@@ -60,6 +60,7 @@ const validate = (payload, config, isCashAsset) => {
   }
   if (!payload.ticker) return 'Ticker is required.'
   if (!payload.quantity || payload.quantity <= 0) return 'Quantity must be greater than zero.'
+  if (!Number.isInteger(payload.quantity)) return 'Quantity must be a whole number of units.'
   if (!payload.price || payload.price <= 0) return 'Price must be greater than zero.'
   return null
 }
@@ -148,6 +149,8 @@ function TransactionModal({ mode, isOpen, onClose, onSubmit }) {
               label="Quantity"
               value={formData.quantity}
               onChange={handleFieldChange}
+              min="1"
+              step="1"
               placeholder="10"
             />
             <NumberField

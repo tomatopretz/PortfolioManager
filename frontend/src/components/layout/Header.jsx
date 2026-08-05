@@ -16,7 +16,7 @@ function HeaderStat({ label, value, className = '' }) {
 }
 
 function Header() {
-  const { totalValue, totalReturn } = usePortfolioContext()
+  const { totalValue, cashBalance, totalReturn } = usePortfolioContext()
 
   return (
     <header className="w-full border-b border-[var(--gridline)] bg-[var(--surface-1)] shadow-[var(--shadow-sm)]">
@@ -28,6 +28,14 @@ function Header() {
             <HeaderStat
               label="Total Value"
               value={formatCurrency(totalValue, 0)}
+              className="text-[var(--text-primary)]"
+            />
+
+            <div className="w-px bg-[var(--gridline)]" />
+
+            <HeaderStat
+              label="Cash Balance"
+              value={formatCurrency(cashBalance, 0)}
               className="text-[var(--text-primary)]"
             />
 

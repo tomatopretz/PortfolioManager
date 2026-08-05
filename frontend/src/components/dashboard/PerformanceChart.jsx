@@ -12,10 +12,12 @@ const GRADIENT_ID = 'performance-area-gradient'
 const formatHourTick = (timestamp) => {
   const hour = new Date(timestamp).getHours()
   const displayHour = hour % 12 === 0 ? 12 : hour % 12
-  return `${displayHour}${hour >= 12 ? 'p' : 'a'}`
+  return `${displayHour}${hour >= 12 ? 'pm' : 'am'}`
 }
 
-/** One tick on every whole hour covered by the intraday series. */
+const INTRADAY_TICK_HOURS = 2
+
+/** One tick every other whole hour covered by the intraday series. */
 const buildHourlyTicks = (points) => {
   if (points.length === 0) return []
   const timestamps = points.map((point) => point.timestamp)
@@ -29,7 +31,7 @@ const buildHourlyTicks = (points) => {
   const ticks = []
   while (cursor.getTime() <= max) {
     ticks.push(cursor.getTime())
-    cursor.setHours(cursor.getHours() + 1)
+    cursor.setHours(cursor.getHours() + INTRADAY_TICK_HOURS)
   }
   return ticks
 }
@@ -74,13 +76,13 @@ function PerformanceTooltip({ active, payload }) {
   if (!active || !payload?.length) return null
   return (
     <div className="rounded border border-[var(--border)] bg-[var(--surface-1)] p-2 shadow-[var(--shadow-lg)]">
-      <p className="text-xs font-semibold text-[var(--text-primary)]">{payload[0].payload.date}</p>
-      <p className="text-xs text-[var(--primary)]">{formatCurrency(payload[0].value)}</p>
+      <p className="text-sm font-semibold text-[var(--text-primary)]">{payload[0].payload.date}</p>
+      <p className="text-sm text-[var(--primary)]">{formatCurrency(payload[0].value)}</p>
     </div>
   )
 }
 
-const AXIS_TICK = { fontSize: 12, fill: 'var(--text-secondary)' }
+const AXIS_TICK = { fontSize: 14, fill: 'var(--text-secondary)' }
 
 function PerformanceChart({ data, timeRange, onTimeRangeChange }) {
   const isIntraday = timeRange === INTRADAY_RANGE
