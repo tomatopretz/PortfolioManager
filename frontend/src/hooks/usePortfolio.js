@@ -61,19 +61,29 @@ export const usePortfolio = () => {
 
   // Failures are returned to the caller only: the transaction modal owns the form and shows
   // them inline, so pushing them into `actionError` would also raise a banner on every page.
+  //
+  // Only holdings are awaited before resolving - the modal doesn't render the performance
+  // chart, so there's no reason to keep it open for the ~3 extra yfinance round-trips a
+  // performance fetch makes. That fetch still fires here (same moment, same request) and
+  // updates the chart whenever it lands; it's just not on the modal's critical path.
+  //
+  // Deliberately `loadPerformance` rather than `refreshPerformance`: a trade actually changes
+  // what the chart should show (new holdings), so it re-enters the chart's loading state -
+  // unlike a manual refresh, which is just a price check on data that's still valid.
   const submitTransaction = useCallback(
     async (request, payload) => {
       setActionError(null)
       try {
         await request(payload)
-        await refreshAll()
+        await refreshItems()
+        loadPerformance(timeRange)
         setDataVersion((version) => version + 1)
         return { success: true }
       } catch (err) {
         return { success: false, error: err.message }
       }
     },
-    [refreshAll]
+    [refreshItems, loadPerformance, timeRange]
   )
 
   const buyAsset = useCallback(
