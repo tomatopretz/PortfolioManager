@@ -1,5 +1,6 @@
 import { usePortfolioContext } from '../../context/PortfolioContext'
 import TransactionButton from '../portfolio/TransactionButton'
+import RefreshButton from './RefreshButton'
 import { formatCurrency, formatSignedCurrencyOrNA, formatSignedPercentOrNA } from '../../utils/format'
 import { toneClass } from '../../utils/portfolio'
 
@@ -47,7 +48,8 @@ function Header() {
             />
           </div>
 
-          <div className="flex gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <RefreshButton />
             <TransactionButton mode="buy" />
             <TransactionButton mode="sell" />
           </div>

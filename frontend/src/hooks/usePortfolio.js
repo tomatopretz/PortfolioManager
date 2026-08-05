@@ -27,8 +27,8 @@ export const usePortfolio = () => {
   const itemsResource = useAsyncResource(getPortfolioItems, [])
   const performanceResource = useAsyncResource(getPerformance, NO_PERFORMANCE_RANGES)
 
-  const { data: items, setData: setItems, load: loadItems } = itemsResource
-  const { data: performanceRanges, load: loadPerformance } = performanceResource
+  const { data: items, setData: setItems, load: loadItems, refresh: refreshItems } = itemsResource
+  const { data: performanceRanges, load: loadPerformance, refresh: refreshPerformance } = performanceResource
 
   useEffect(() => {
     loadItems()
@@ -46,10 +46,13 @@ export const usePortfolio = () => {
     [performanceRanges, timeRange]
   )
 
-  // A trade changes both holdings and the value history, so refresh the two together.
+  // Both a trade and a manual refresh invalidate holdings and the value history alike, so the
+  // two are always re-fetched together. Deliberately `refresh` rather than `load`: the data is
+  // already on screen, and blanking it back to a spinner on every price check reads as a page
+  // reload rather than an update.
   const refreshAll = useCallback(
-    () => Promise.all([loadItems(), loadPerformance()]),
-    [loadItems, loadPerformance]
+    () => Promise.all([refreshItems(), refreshPerformance(timeRange)]),
+    [refreshItems, refreshPerformance, timeRange]
   )
 
   // Failures are returned to the caller only: the transaction modal owns the form and shows
@@ -131,7 +134,13 @@ export const usePortfolio = () => {
     itemsLoading: itemsResource.loading,
     performanceLoading: performanceResource.loading,
     loading: itemsResource.loading || performanceResource.loading,
+    refreshing: itemsResource.refreshing || performanceResource.refreshing,
     error: actionError ?? itemsResource.error ?? performanceResource.error,
+    // Fetch errors only, excluding actionError: a failed trade shouldn't read as stale prices.
+    refreshError: itemsResource.error ?? performanceResource.error,
+    // Holdings carry the prices, so their fetch time is the one worth showing.
+    pricesUpdatedAt: itemsResource.lastUpdatedAt,
+    refreshAll,
     timeRange,
     setTimeRange,
     dataVersion,
