@@ -2,7 +2,7 @@ import { get, getBlob, patch, post } from './api';
 import { TIME_RANGES } from '../constants/portfolio';
 import { isCashItem, normalizeAssetType } from '../utils/portfolio';
 
-// Backend returns costBasis/currentPrice/marketValue/unrealizedPnL; the UI also expects
+// Backend returns costBasis/currentPrice/marketValue/pnl/gainLossPercent; the UI expects
 // gainLoss/gainLossPercent (as the mock service produces), so derive those here.
 //
 // CASH has no price concept on the backend (currentPrice/marketValue are null) - it's worth
@@ -28,15 +28,26 @@ const enrichItem = (item) => {
 
   const currentPrice = isCash ? 1 : item.currentPrice ?? 0;
   const marketValue = isCash ? Number(item.quantity ?? 0) : item.marketValue ?? 0;
-  const gainLoss = isCash ? 0 : item.unrealizedPnL ?? marketValue - item.costBasis;
-  const gainLossPercent = item.costBasis > 0 ? (gainLoss / item.costBasis) * 100 : 0;
+  const gainLoss = isCash ? 0 : item.pnl ?? marketValue - item.costBasis;
+  const gainLossPercent = isCash
+    ? 0
+    : item.gainLossPercent ?? (item.costBasis > 0 ? (gainLoss / item.costBasis) * 100 : 0);
 
   return { ...item, assetType, currentPrice, marketValue, gainLoss, gainLossPercent };
 };
 
+// GET /api/portfolio now returns { items, totalValue, totalCashBalance, totalReturn,
+// totalReturnPercent } rather than a bare array - the portfolio-wide totals are computed
+// backend-side alongside each item's pnl/gainLossPercent instead of being summed client-side.
 export const getPortfolioItems = async () => {
   const response = await get('/api/portfolio');
-  return (response || []).map(enrichItem);
+  return {
+    items: (response?.items || []).map(enrichItem),
+    totalValue: response?.totalValue ?? 0,
+    totalCashBalance: response?.totalCashBalance ?? 0,
+    totalReturn: response?.totalReturn ?? 0,
+    totalReturnPercent: response?.totalReturnPercent ?? 0,
+  };
 };
 
 const toChartPoints = (points) =>

@@ -107,11 +107,16 @@ def test_toggle_favourite_returns_none_when_item_not_found(mock_repo):
 # --- enriched "view" - always adds live pricing --------------------------------------------
 
 @patch('services.portfolio_service.PortfolioService.list_portfolio_items')  # mock: skip the real repository call
-def test_get_portfolio_returns_empty_list_for_empty_portfolio(mock_list_items):
+def test_get_portfolio_returns_empty_result_for_empty_portfolio(mock_list_items):
     # Given there are no portfolio items at all
     mock_list_items.return_value = []
-    # When/Then the enriched portfolio is [] rather than an error
-    assert PortfolioService.get_enriched_portfolio() == []
+    # When/Then the enriched portfolio has no items and all totals at 0, rather than an error
+    result = PortfolioService.get_enriched_portfolio()
+    assert result.items == []
+    assert result.totalValue == 0
+    assert result.totalCashBalance == 0
+    assert result.totalReturn == 0
+    assert result.totalReturnPercent == 0
 
 
 @patch('services.portfolio_service.price_service.list_current_prices')  # mock: skip the real yfinance call
@@ -121,26 +126,30 @@ def test_get_portfolio_computes_market_value_and_pnl(mock_list_items, mock_list_
     mock_list_items.return_value = [_item('AAPL', quantity=10, cost_basis=1000)]
     mock_list_prices.return_value = {'AAPL': 150.0}
 
-    # When/Then the enriched item has currentPrice/marketValue/unrealizedPnL computed from it
-    [result] = PortfolioService.get_enriched_portfolio()
+    # When/Then the enriched item has currentPrice/marketValue/costBasisPerShare/pnl/gainLossPercent computed from it
+    [result] = PortfolioService.get_enriched_portfolio().items
     assert result.currentPrice == 150.0
     assert result.marketValue == 1500.0
-    assert result.unrealizedPnL == 500.0
+    assert result.costBasisPerShare == 100.0
+    assert result.pnl == 500.0
+    assert result.gainLossPercent == 50.0
     mock_list_prices.assert_called_once_with(['AAPL'])
 
 
 @patch('services.portfolio_service.price_service.list_current_prices')  # mock: skip the real yfinance call
 @patch('services.portfolio_service.PortfolioService.list_portfolio_items')  # mock: skip the real repository call
-def test_get_portfolio_cash_has_no_price_or_pnl(mock_list_items, mock_list_prices):
+def test_get_portfolio_cash_is_priced_at_par_with_zero_pnl(mock_list_items, mock_list_prices):
     # Given the only holding is CASH
     mock_list_items.return_value = [_item('USD', quantity=500, cost_basis=500, asset_type='CASH')]
     mock_list_prices.return_value = {}
 
-    # When/Then CASH gets no price/P&L, and marketValue is just its quantity (always at par)
-    [result] = PortfolioService.get_enriched_portfolio()
-    assert result.currentPrice is None
+    # When/Then CASH is always priced at $1.00/unit, marketValue is just its quantity, and pnl is
+    # a definite 0 rather than unknown/None - CASH is never "unpriced"
+    [result] = PortfolioService.get_enriched_portfolio().items
+    assert result.currentPrice == 1.0
     assert result.marketValue == 500  # cash marketValue is just its quantity, always at par
-    assert result.unrealizedPnL is None
+    assert result.pnl == 0
+    assert result.gainLossPercent == 0
     mock_list_prices.assert_not_called()  # no non-CASH tickers, so no price lookup needed at all
 
 
@@ -152,10 +161,30 @@ def test_get_portfolio_flags_unresolvable_ticker_as_stale(mock_list_items, mock_
     mock_list_prices.return_value = {}
 
     # When/Then price/marketValue/P&L are all None instead of raising
-    [result] = PortfolioService.get_enriched_portfolio()
+    [result] = PortfolioService.get_enriched_portfolio().items
     assert result.currentPrice is None
     assert result.marketValue is None
-    assert result.unrealizedPnL is None
+    assert result.pnl is None
+    assert result.gainLossPercent is None
+
+
+@patch('services.portfolio_service.price_service.list_current_prices')  # mock: skip the real yfinance call
+@patch('services.portfolio_service.PortfolioService.list_portfolio_items')  # mock: skip the real repository call
+def test_get_portfolio_totals_sum_across_items(mock_list_items, mock_list_prices):
+    # Given a stock holding with a gain and a CASH holding
+    mock_list_items.return_value = [
+        _item('AAPL', quantity=10, cost_basis=1000),
+        _item('USD', quantity=500, cost_basis=500, asset_type='CASH'),
+    ]
+    mock_list_prices.return_value = {'AAPL': 150.0}
+
+    # When/Then totals reflect market value across both items, cash balance from CASH alone,
+    # and total return as the sum of each item's pnl (CASH contributes 0)
+    result = PortfolioService.get_enriched_portfolio()
+    assert result.totalValue == 2000.0  # 1500 (AAPL) + 500 (CASH)
+    assert result.totalCashBalance == 500.0
+    assert result.totalReturn == 500.0  # AAPL's 500 pnl; CASH has none
+    assert result.totalReturnPercent == round(500.0 / 1500.0 * 100, 2)  # return over total cost basis (1000 + 500)
 
 
 @patch('services.portfolio_service.PortfolioService.get_portfolio_item_by_ticker_and_asset_type')  # mock: skip the real repository call
@@ -173,25 +202,28 @@ def test_get_portfolio_item_computes_market_value_and_pnl(mock_get_item, mock_ge
     mock_get_item.return_value = _item('AAPL', quantity=10, cost_basis=1000)
     mock_get_price.return_value = 150.0
 
-    # When/Then the enriched item has currentPrice/marketValue/unrealizedPnL computed from it
+    # When/Then the enriched item has currentPrice/marketValue/pnl/gainLossPercent computed from it
     result = PortfolioService.get_enriched_portfolio_item('AAPL', 'STOCK')
     assert result.currentPrice == 150.0
     assert result.marketValue == 1500.0
-    assert result.unrealizedPnL == 500.0
+    assert result.pnl == 500.0
+    assert result.gainLossPercent == 50.0
     mock_get_price.assert_called_once_with('AAPL')
 
 
 @patch('services.portfolio_service.price_service.get_current_price')  # mock: skip the real yfinance call
 @patch('services.portfolio_service.PortfolioService.get_portfolio_item_by_ticker_and_asset_type')  # mock: skip the real repository call
-def test_get_portfolio_item_cash_has_no_price_or_pnl(mock_get_item, mock_get_price):
+def test_get_portfolio_item_cash_is_priced_at_par_with_zero_pnl(mock_get_item, mock_get_price):
     # Given the item is CASH
     mock_get_item.return_value = _item('USD', quantity=500, cost_basis=500, asset_type='CASH')
 
-    # When/Then CASH gets no price/P&L, and marketValue is just its quantity - no price lookup happens
+    # When/Then CASH is always priced at $1.00/unit, marketValue is just its quantity, and pnl is
+    # a definite 0 - no price lookup happens
     result = PortfolioService.get_enriched_portfolio_item('USD', 'CASH')
-    assert result.currentPrice is None
+    assert result.currentPrice == 1.0
     assert result.marketValue == 500
-    assert result.unrealizedPnL is None
+    assert result.pnl == 0
+    assert result.gainLossPercent == 0
     mock_get_price.assert_not_called()  # CASH never needs a price lookup
 
 
@@ -206,4 +238,5 @@ def test_get_portfolio_item_flags_unpriceable_ticker_as_stale(mock_get_item, moc
     result = PortfolioService.get_enriched_portfolio_item('BADTICKER', 'STOCK')
     assert result.currentPrice is None
     assert result.marketValue is None
-    assert result.unrealizedPnL is None
+    assert result.pnl is None
+    assert result.gainLossPercent is None

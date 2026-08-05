@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from app import app
 from models.PortfolioItemDTO import PortfolioItemDTO
 from models.PortfolioItemResultDTO import PortfolioItemResultDTO
+from models.PortfolioResultDTO import PortfolioResultDTO
 
 
 @pytest.fixture
@@ -22,30 +23,38 @@ def client():
 
 @patch('routes.portfolio.PortfolioService.get_enriched_portfolio')  # mock: replace the service so no real DB/pricing call runs
 def test_get_portfolio_returns_items(mock_get_portfolio, client):
-    # Given the service returns one enriched item
-    mock_get_portfolio.return_value = [
-        PortfolioItemResultDTO(
-            id='1', ticker='AAPL', assetType='STOCK', quantity=10, costBasis=1000,
-            currentPrice=150, marketValue=1500, unrealizedPnL=500,
-        ),
-    ]
+    # Given the service returns one enriched item plus totals
+    mock_get_portfolio.return_value = PortfolioResultDTO(
+        items=[
+            PortfolioItemResultDTO(
+                id='1', ticker='AAPL', assetType='STOCK', quantity=10, costBasis=1000,
+                currentPrice=150, marketValue=1500, pnl=500, gainLossPercent=50,
+            ),
+        ],
+        totalValue=1500, totalCashBalance=0, totalReturn=500, totalReturnPercent=50,
+    )
     # When calling GET /api/portfolio
     response = client.get('/api/portfolio')
-    # Then the route returns 200 with that item serialized as JSON
+    # Then the route returns 200 with that item and the portfolio totals serialized as JSON
     assert response.status_code == 200
-    [item] = response.json
+    [item] = response.json['items']
     assert item['ticker'] == 'AAPL'
     assert item['marketValue'] == 1500
+    assert response.json['totalValue'] == 1500
+    assert response.json['totalReturn'] == 500
+    assert response.json['totalReturnPercent'] == 50
 
 
 @patch('routes.portfolio.PortfolioService.get_enriched_portfolio')  # mock: replace the service so no real DB/pricing call runs
 def test_get_portfolio_returns_empty_list(mock_get_portfolio, client):
     # Given the service returns no items
-    mock_get_portfolio.return_value = []
-    # When/Then calling GET /api/portfolio returns 200 with an empty list, not an error
+    mock_get_portfolio.return_value = PortfolioResultDTO(
+        items=[], totalValue=0, totalCashBalance=0, totalReturn=0, totalReturnPercent=0,
+    )
+    # When/Then calling GET /api/portfolio returns 200 with an empty items list, not an error
     response = client.get('/api/portfolio')
     assert response.status_code == 200
-    assert response.json == []
+    assert response.json['items'] == []
 
 
 @patch('routes.portfolio.PortfolioService.get_enriched_portfolio')  # mock: replace the service so no real DB/pricing call runs
@@ -63,7 +72,7 @@ def test_get_portfolio_returns_502_on_failure(mock_get_portfolio, client):
 def _result_item(**overrides):
     defaults = dict(
         id='1', ticker='AAPL', assetType='STOCK', quantity=10, costBasis=1000,
-        currentPrice=150, marketValue=1500, unrealizedPnL=500,
+        currentPrice=150, marketValue=1500, pnl=500, gainLossPercent=50,
     )
     defaults.update(overrides)
     return PortfolioItemResultDTO(**defaults)

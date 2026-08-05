@@ -6,6 +6,7 @@ from flask_pydantic_spec import Response
 from models.ErrorResultDTO import ErrorResultDTO
 from models.PortfolioItemDTO import PortfolioItemDTO
 from models.PortfolioItemResultDTO import PortfolioItemResultDTO
+from models.PortfolioResultDTO import PortfolioResultDTO
 from openapi import api
 from services.portfolio_service import PortfolioService
 
@@ -18,16 +19,16 @@ portfolio_bp = Blueprint('portfolio', __name__, url_prefix='/api/portfolio')
 # Read-only: a PortfolioItem is a derived view of transaction history, never created directly -
 # see POST /api/transactions for recording the buy/sell/deposit/withdraw that produces one.
 @portfolio_bp.route('', methods=['GET'])
-@api.validate(resp=Response(HTTP_200=list[PortfolioItemResultDTO], HTTP_502=ErrorResultDTO, validate=False), tags=['Portfolio'])
-def get_portfolio() -> tuple[list[dict], int]:
-    """Get all portfolio holdings."""
+@api.validate(resp=Response(HTTP_200=PortfolioResultDTO, HTTP_502=ErrorResultDTO, validate=False), tags=['Portfolio'])
+def get_portfolio() -> tuple[dict, int]:
+    """Get all portfolio holdings, plus portfolio-wide totals."""
     try:
-        items = PortfolioService.get_enriched_portfolio()
+        result = PortfolioService.get_enriched_portfolio()
     except Exception as e:
         logger.exception('Failed to fetch portfolio')
         return {'error': f'Failed to fetch portfolio: {e}'}, 502
 
-    return [item.model_dump() for item in items], 200
+    return result.model_dump(), 200
 
 
 # GET /api/portfolio/<ticker>/<assetType> - get a single portfolio holding by its natural key

@@ -13,6 +13,9 @@ import { isCashItem, sumBy } from '../utils/portfolio'
 // Stable empty map so the initial render doesn't hand the chart a fresh object each time.
 const NO_PERFORMANCE_RANGES = {}
 
+// Stable empty portfolio so the initial render doesn't hand consumers a fresh object each time.
+const EMPTY_PORTFOLIO = { items: [], totalValue: 0, totalCashBalance: 0, totalReturn: 0, totalReturnPercent: 0 }
+
 /**
  * Owns all portfolio state. Intended to be instantiated exactly once, by `PortfolioProvider` —
  * components should read it through `usePortfolioContext` rather than calling this directly.
@@ -24,10 +27,11 @@ export const usePortfolio = () => {
   // (transaction history) depend on it to know their copy is stale.
   const [dataVersion, setDataVersion] = useState(0)
 
-  const itemsResource = useAsyncResource(getPortfolioItems, [])
+  const itemsResource = useAsyncResource(getPortfolioItems, EMPTY_PORTFOLIO)
   const performanceResource = useAsyncResource(getPerformance, NO_PERFORMANCE_RANGES)
 
-  const { data: items, setData: setItems, load: loadItems, refresh: refreshItems } = itemsResource
+  const { data: portfolio, setData: setPortfolio, load: loadItems, refresh: refreshItems } = itemsResource
+  const { items } = portfolio
   const { data: performanceRanges, load: loadPerformance, refresh: refreshPerformance } = performanceResource
 
   useEffect(() => {
@@ -97,7 +101,10 @@ export const usePortfolio = () => {
       setActionError(null)
       // Optimistic flip; rolled back to the item's original value if the request fails.
       const applyFavourite = (isFavourite) =>
-        setItems((current) => current.map((i) => (i.id === item.id ? { ...i, isFavourite } : i)))
+        setPortfolio((current) => ({
+          ...current,
+          items: current.items.map((i) => (i.id === item.id ? { ...i, isFavourite } : i)),
+        }))
 
       applyFavourite(!item.isFavourite)
       try {
@@ -109,24 +116,23 @@ export const usePortfolio = () => {
         return { success: false, error: err.message }
       }
     },
-    [items, setItems]
+    [items, setPortfolio]
   )
 
-  const totals = useMemo(() => {
-    const totalValue = sumBy(items, (item) => item.marketValue)
-    const totalCostBasis = sumBy(items, (item) => item.costBasis)
-    const cashItem = items.find(isCashItem)
-
-    return {
-      totalValue,
-      totalCostBasis,
-      cashBalance: cashItem ? Number(cashItem.marketValue ?? cashItem.quantity ?? 0) : 0,
+  // totalValue/totalCashBalance/totalReturn(Percent) now come from the backend (computed
+  // alongside each item's pnl/gainLossPercent) rather than being summed/derived here.
+  const totals = useMemo(
+    () => ({
+      totalValue: portfolio.totalValue,
+      totalCostBasis: sumBy(items, (item) => item.costBasis),
+      cashBalance: portfolio.totalCashBalance,
       totalReturn: {
-        amount: totalValue - totalCostBasis,
-        percent: totalCostBasis > 0 ? ((totalValue - totalCostBasis) / totalCostBasis) * 100 : 0,
+        amount: portfolio.totalReturn,
+        percent: portfolio.totalReturnPercent,
       },
-    }
-  }, [items])
+    }),
+    [items, portfolio]
+  )
 
   return {
     items,
