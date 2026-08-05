@@ -21,7 +21,7 @@ function Header() {
   return (
     <header className="w-full border-b border-[var(--gridline)] bg-[var(--surface-1)] shadow-[var(--shadow-sm)]">
       <div className="flex items-center justify-between px-6 py-5">
-        <h1 className="text-3xl font-bold text-[var(--text-primary)]">Portfolio Manager</h1>
+        <h1 className="text-3xl font-bold text-[var(--text-primary)]">Portfolio Manager 🦩</h1>
 
         <div className="flex items-center gap-8">
           <div className="flex gap-5">
