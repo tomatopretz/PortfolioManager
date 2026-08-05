@@ -1,4 +1,5 @@
 import { get, patch, post } from './api';
+import { TIME_RANGES } from '../constants/portfolio';
 import { isCashItem, normalizeAssetType } from '../utils/portfolio';
 
 // Backend returns costBasis/currentPrice/marketValue/unrealizedPnL; the UI also expects
@@ -38,17 +39,21 @@ export const getPortfolioItems = async () => {
   return (response || []).map(enrichItem);
 };
 
-export const getPerformance = async (range) => {
-  const response = await get('/api/performance');
-  const ranges = response?.ranges || {};
-  const key = String(range || 'all').trim();
-
-  const points = ranges[key.toUpperCase()] ?? ranges[key.toLowerCase()] ?? [];
-
-  return points.map((point) => ({
+const toChartPoints = (points) =>
+  (points || []).map((point) => ({
     date: point.date,
     totalValue: Number(point.value ?? point.totalValue ?? 0),
   }));
+
+// The endpoint returns every range in one payload, so this returns them all keyed by
+// `TIME_RANGES` key. Switching the chart's range filter is then a lookup, not a request.
+export const getPerformance = async () => {
+  const response = await get('/api/performance');
+  const ranges = response?.ranges || {};
+
+  return Object.fromEntries(
+    TIME_RANGES.map(({ key }) => [key, toChartPoints(ranges[key.toUpperCase()] ?? ranges[key])])
+  );
 };
 
 const recordTransaction = (payload) => post('/api/transactions', payload);

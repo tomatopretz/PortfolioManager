@@ -10,6 +10,9 @@ import { useAsyncResource } from './useAsyncResource'
 import { DEFAULT_TIME_RANGE, MAX_FAVOURITES } from '../constants/portfolio'
 import { isCashItem, sumBy } from '../utils/portfolio'
 
+// Stable empty map so the initial render doesn't hand the chart a fresh object each time.
+const NO_PERFORMANCE_RANGES = {}
+
 /**
  * Owns all portfolio state. Intended to be instantiated exactly once, by `PortfolioProvider` —
  * components should read it through `usePortfolioContext` rather than calling this directly.
@@ -22,25 +25,35 @@ export const usePortfolio = () => {
   const [dataVersion, setDataVersion] = useState(0)
 
   const itemsResource = useAsyncResource(getPortfolioItems, [])
-  const performanceResource = useAsyncResource(getPerformance, [])
+  const performanceResource = useAsyncResource(getPerformance, NO_PERFORMANCE_RANGES)
 
   const { data: items, setData: setItems, load: loadItems } = itemsResource
-  const { data: performance, load: loadPerformance } = performanceResource
+  const { data: performanceRanges, load: loadPerformance } = performanceResource
 
   useEffect(() => {
     loadItems()
   }, [loadItems])
 
+  // The performance endpoint returns every range in a single response, so this runs once and
+  // changing `timeRange` is a lookup below rather than a refetch - the chart never drops back
+  // to a spinner just because a filter was clicked.
   useEffect(() => {
-    loadPerformance(timeRange)
-  }, [loadPerformance, timeRange])
+    loadPerformance()
+  }, [loadPerformance])
+
+  const performance = useMemo(
+    () => performanceRanges[timeRange] ?? [],
+    [performanceRanges, timeRange]
+  )
 
   // A trade changes both holdings and the value history, so refresh the two together.
   const refreshAll = useCallback(
-    () => Promise.all([loadItems(), loadPerformance(timeRange)]),
-    [loadItems, loadPerformance, timeRange]
+    () => Promise.all([loadItems(), loadPerformance()]),
+    [loadItems, loadPerformance]
   )
 
+  // Failures are returned to the caller only: the transaction modal owns the form and shows
+  // them inline, so pushing them into `actionError` would also raise a banner on every page.
   const submitTransaction = useCallback(
     async (request, payload) => {
       setActionError(null)
@@ -50,7 +63,6 @@ export const usePortfolio = () => {
         setDataVersion((version) => version + 1)
         return { success: true }
       } catch (err) {
-        setActionError(err.message)
         return { success: false, error: err.message }
       }
     },
