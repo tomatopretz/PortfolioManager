@@ -13,6 +13,7 @@
 | 9 | Star/favourite up to 10 holdings | My most-watched positions are easy to spot | [FavouriteStar.jsx](../frontend/src/components/holdings/FavouriteStar.jsx) → `PATCH /api/portfolio/<ticker>/<asset_type>/favourite`, optimistic with rollback. | Holdings |
 | 10 | See a log of every buy/sell/deposit/withdrawal | I can audit my past activity | [TransactionHistoryPage.jsx](../frontend/src/pages/TransactionHistoryPage.jsx): joins transactions with holdings, collapses auto-generated cash legs. | Transactions |
 | 11 | Search, filter, and sort my transaction history | I can find a specific past trade | Local search/filter/sort on `TransactionHistoryPage` + [TransactionSummaryCards.jsx](../frontend/src/components/transactions/TransactionSummaryCards.jsx). | Transactions |
+| 12 | Import and export my transactions as CSV | I can bulk-load trades from elsewhere or back up/analyze my history outside the app | Export: `GET /api/transactions/export`. Import: [TransactionCsvImportModal.jsx](../frontend/src/components/transactions/TransactionCsvImportModal.jsx) parses + client-validates via [transactionCsv.js](../frontend/src/utils/transactionCsv.js), then `POST /api/transactions/bulk` (server re-validates every row). | Transactions |
 
 ## Future / To Be Done (Scaling)
 
