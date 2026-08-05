@@ -57,11 +57,10 @@ function HoldingsSummaryCards({ items, totalValue }) {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       {CARDS.map((card) => (
         <PositionCard key={card.label} label={card.label} {...describe(card)} />
       ))}
-      <StatTile label="Total Market Value" value={totalValue} />
     </div>
   )
 }

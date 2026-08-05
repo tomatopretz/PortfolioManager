@@ -7,7 +7,6 @@ import LoadingSpinner from '../components/common/LoadingSpinner'
 import AllocationPieChart from '../components/dashboard/AllocationPieChart'
 import HoldingsPreview from '../components/dashboard/HoldingsPreview'
 import PerformanceChart from '../components/dashboard/PerformanceChart'
-import SummaryStats from '../components/dashboard/SummaryStats'
 import TransactionModal from '../components/portfolio/TransactionModal'
 import { getMarketValue, isTradableHolding } from '../utils/portfolio'
 
@@ -65,11 +64,6 @@ function DashboardPage() {
           {/* Wait for the items fetch to fully resolve so holdings never render partially. */}
           {!itemsLoading && <HoldingsPreview items={items} />}
 
-          <SummaryStats
-            totalValue={totalValue}
-            totalReturn={totalReturn}
-            cashBalance={cashBalance}
-          />
         </div>
       ) : (
         <EmptyState
