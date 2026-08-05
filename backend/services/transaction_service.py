@@ -109,7 +109,33 @@ def _running_quantities(transactions: list[TransactionDTO]) -> list[float]:
     return history
 
 
-def _validate_debit(item: PortfolioItemDTO, amount: float, date: datetime, conn: Connection, label: str) -> None:
+def _same_date_priority(txn: TransactionDTO, is_cash: bool) -> int:
+    """Tie-break order for transactions sharing the exact same date - `date` alone doesn't say
+    which happened first, so pick the order most likely to keep a same-day sequence valid."""
+    if not is_cash:
+        # a non-CASH item only ever has buys and sells of itself: buy before sell
+        is_buy = txn.type == 'buy'
+        return 0 if is_buy else 1
+
+    # on CASH's own history, "buy"/"sell" mean four different things depending on `useCash`:
+    is_deposit = txn.type == 'buy' and not txn.useCash
+    is_debit_from_a_buy_elsewhere = txn.type == 'sell' and txn.useCash
+    is_credit_from_a_sell_elsewhere = txn.type == 'buy' and txn.useCash
+    is_withdrawal = txn.type == 'sell' and not txn.useCash
+
+    if is_deposit:
+        return 0
+    if is_debit_from_a_buy_elsewhere:
+        return 1
+    if is_credit_from_a_sell_elsewhere:
+        return 2
+    assert is_withdrawal
+    return 3
+
+
+def _validate_debit(
+    item: PortfolioItemDTO, amount: float, date: datetime, conn: Connection, label: str, useCash: bool = True,
+) -> None:
     """Raise InsufficientBalanceError if debiting `amount` from `item` at `date` would ever leave it negative.
 
     - Cheap reject: a debit anywhere shifts the final balance by -amount, so if today's quantity
@@ -125,10 +151,11 @@ def _validate_debit(item: PortfolioItemDTO, amount: float, date: datetime, conn:
     if latest_date is None or date >= latest_date:
         return
 
-    prospective = TransactionDTO(portfolioItemId=item.id, type='sell', quantity=amount, price=1, date=date)
+    is_cash = item.ticker == CASH_TICKER
+    prospective = TransactionDTO(portfolioItemId=item.id, type='sell', quantity=amount, price=1, date=date, useCash=useCash)
     existing = TransactionRepository.list_by_portfolio_item(item.id, conn=conn)
-    # combine and sort by date, so the new debit is in the right place
-    combined = sorted(existing + [prospective], key=lambda t: t.date) 
+    # combine and sort by (date, same-day category) - date alone leaves same-day ties undefined
+    combined = sorted(existing + [prospective], key=lambda t: (t.date, _same_date_priority(t, is_cash)))
     for txn, balance in zip(combined, _running_quantities(combined)):
         if balance < -_EPSILON:
             raise InsufficientBalanceError(
@@ -178,7 +205,7 @@ def _debit_cash(
 ) -> TransactionDTO:
     """Validate + apply a cash debit. Pass `cash` in if the caller already holds it locked (see `_sell_asset`)."""
     cash = cash or _get_cash_item(conn)
-    _validate_debit(cash, amount, date, conn, label='CASH balance')
+    _validate_debit(cash, amount, date, conn, label='CASH balance', useCash=useCash)
 
     cash.quantity = round_money(cash.quantity - amount)
     cash.costBasis = round_money(cash.costBasis - amount)  # cash costBasis always mirrors quantity 1:1
