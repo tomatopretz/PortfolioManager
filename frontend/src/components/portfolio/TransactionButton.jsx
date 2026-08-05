@@ -5,7 +5,7 @@ import TransactionModal from './TransactionModal'
 
 const MODES = {
   buy: { label: 'Add Asset', variant: 'primary' },
-  sell: { label: 'Sell Asset', variant: 'secondary' },
+  sell: { label: 'Remove Asset', variant: 'secondary' },
 }
 
 /** Button + its transaction modal, wired to the portfolio context. */

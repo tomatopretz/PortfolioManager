@@ -27,7 +27,7 @@ function Sidebar() {
   return (
     <aside className="sticky top-0 flex h-screen w-64 flex-col border-r border-[var(--gridline)] bg-[var(--surface-1)]">
       <div className="mb-12 px-6 pt-8">
-        <p className="font-display text-2xl font-bold text-[var(--primary)]">PM</p>
+        <p className="font-display text-2xl font-bold text-[var(--primary)]">PM 🦩</p>
         <p className="mt-2 text-xs font-semibold tracking-widest text-[var(--text-secondary)]">
           PORTFOLIO
         </p>

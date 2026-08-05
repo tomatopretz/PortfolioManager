@@ -16,6 +16,7 @@ const MODES = {
   buy: {
     title: 'Add Asset',
     submitLabel: 'Add Asset',
+    cashLabel: 'Cash Deposit',
     cashAmountLabel: 'Amount',
     priceLabel: 'Price',
     invalidCashAmount: 'Please enter a valid cash amount.',
@@ -25,6 +26,7 @@ const MODES = {
   sell: {
     title: 'Sell Asset',
     submitLabel: 'Sell Asset',
+    cashLabel: 'Cash Withdrawal',
     cashAmountLabel: 'Withdrawal Amount',
     priceLabel: 'Sale Price',
     invalidCashAmount: 'Please enter a valid withdrawal amount.',
@@ -111,7 +113,7 @@ function TransactionModal({ mode, isOpen, onClose, onSubmit }) {
       isOpen={isOpen}
       onClose={handleClose}
       eyebrow="New Transaction"
-      title={config.title}
+      title={isCashAsset ? config.cashLabel : config.title}
       closeLabel={`Close ${config.title.toLowerCase()} form`}
     >
       <form onSubmit={handleSubmit} className="space-y-5">
@@ -188,7 +190,7 @@ function TransactionModal({ mode, isOpen, onClose, onSubmit }) {
             Cancel
           </Button>
           <Button type="submit" disabled={submitting}>
-            {submitting ? 'Saving...' : config.submitLabel}
+            {submitting ? 'Saving...' : isCashAsset ? config.cashLabel : config.submitLabel}
           </Button>
         </div>
       </form>

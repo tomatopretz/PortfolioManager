@@ -27,8 +27,8 @@
   --text-muted: light-dark(#999999, #9ca3af);
 
   /* Accent */
-  --primary: #2563eb;
-  --primary-dark: #1d4ed8;
+  --primary: #e774bb;
+  --primary-dark: #d81d90;
 
   /* Status */
   --status-good: #10b981;
