@@ -67,6 +67,31 @@ def test_get_transactions_returns_502_on_failure(mock_list_transactions, client)
     assert response.status_code == 502
 
 
+# --- GET /api/transactions/export --------------------------------------------------------------
+
+@patch('routes.transactions.TransactionService.export_transactions_csv')  # mock: no DB call
+def test_export_transactions_returns_csv_download(mock_export_transactions_csv, client):
+    # Given the service returns CSV text
+    mock_export_transactions_csv.return_value = 'Date,Ticker,Type,Action,Quantity,Price,UseCash\n'
+
+    # When/Then the route returns a CSV attachment
+    response = client.get('/api/transactions/export')
+    assert response.status_code == 200
+    assert response.mimetype == 'text/csv'
+    assert response.text == 'Date,Ticker,Type,Action,Quantity,Price,UseCash\n'
+    assert 'attachment' in response.headers['Content-Disposition']
+
+
+@patch('routes.transactions.TransactionService.export_transactions_csv')  # mock: no DB call
+def test_export_transactions_returns_502_on_failure(mock_export_transactions_csv, client):
+    # Given export fails unexpectedly
+    mock_export_transactions_csv.side_effect = ConnectionError('DB unreachable')
+
+    response = client.get('/api/transactions/export')
+
+    assert response.status_code == 502
+
+
 # --- POST /api/transactions ---------------------------------------------------------------------
 
 @patch('routes.transactions.TransactionService.record_transaction')  # mock: replace the service so no real DB call runs
@@ -195,6 +220,68 @@ def test_record_transaction_returns_502_on_unexpected_error(mock_record_transact
     mock_record_transaction.side_effect = ConnectionError('DB unreachable')
     # When/Then posting a valid body translates the error into a 502 response
     response = client.post('/api/transactions', json=_buy_body())
+    assert response.status_code == 502
+
+
+# --- POST /api/transactions/bulk ---------------------------------------------------------------
+
+@patch('routes.transactions.TransactionService.record_transactions_bulk')  # mock: replace service so no DB call runs
+def test_record_transactions_bulk_returns_201_on_success(mock_record_transactions_bulk, client):
+    # Given the service records two transactions
+    mock_record_transactions_bulk.return_value = [
+        _transaction(id='11111111-1111-1111-1111-111111111111'),
+        _transaction(id='33333333-3333-3333-3333-333333333333', type='sell'),
+    ]
+
+    # When/Then posting a valid bulk body returns the count and created rows
+    response = client.post(
+        '/api/transactions/bulk',
+        json={'transactions': [_buy_body(), _buy_body(type='sell', date='2026-01-02')]},
+    )
+
+    assert response.status_code == 201
+    assert response.json['count'] == 2
+    assert [row['type'] for row in response.json['created']] == ['buy', 'sell']
+    [sent_requests], _ = mock_record_transactions_bulk.call_args
+    assert len(sent_requests) == 2
+    assert sent_requests[0].ticker == 'AAPL'
+    assert sent_requests[1].type == 'sell'
+
+
+def test_record_transactions_bulk_rejects_empty_list(client):
+    # When/Then an empty import is rejected before it reaches the service
+    response = client.post('/api/transactions/bulk', json={'transactions': []})
+    assert response.status_code == 422
+
+
+@patch('routes.transactions.TransactionService.record_transactions_bulk')  # mock: replace service so no DB call runs
+def test_record_transactions_bulk_returns_404_when_item_not_found(mock_record_transactions_bulk, client):
+    # Given a row tries to sell a missing holding
+    mock_record_transactions_bulk.side_effect = PortfolioItemNotFoundError("No portfolio item found for ticker 'AAPL'")
+
+    response = client.post('/api/transactions/bulk', json={'transactions': [_buy_body(type='sell')]})
+
+    assert response.status_code == 404
+    assert 'AAPL' in response.json['error']
+
+
+@patch('routes.transactions.TransactionService.record_transactions_bulk')  # mock: replace service so no DB call runs
+def test_record_transactions_bulk_returns_422_on_insufficient_balance(mock_record_transactions_bulk, client):
+    # Given one row would overdraw cash or a holding
+    mock_record_transactions_bulk.side_effect = InsufficientBalanceError("'AAPL' quantity 5 is less than the 10 required")
+
+    response = client.post('/api/transactions/bulk', json={'transactions': [_buy_body(type='sell')]})
+
+    assert response.status_code == 422
+
+
+@patch('routes.transactions.TransactionService.record_transactions_bulk')  # mock: replace service so no DB call runs
+def test_record_transactions_bulk_returns_502_on_unexpected_error(mock_record_transactions_bulk, client):
+    # Given the service raises an unexpected error
+    mock_record_transactions_bulk.side_effect = ConnectionError('DB unreachable')
+
+    response = client.post('/api/transactions/bulk', json={'transactions': [_buy_body()]})
+
     assert response.status_code == 502
 
 
