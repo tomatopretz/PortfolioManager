@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from app import app
 from models.TransactionDTO import TransactionDTO
-from services.transaction_service import InsufficientCashError, InsufficientQuantityError, PortfolioItemNotFoundError
+from services.transaction_service import InsufficientBalanceError, PortfolioItemNotFoundError
 
 
 @pytest.fixture
@@ -174,7 +174,7 @@ def test_record_transaction_returns_404_when_item_not_found(mock_record_transact
 @patch('routes.transactions.TransactionService.record_transaction')  # mock: replace the service so no real DB call runs
 def test_record_transaction_returns_422_on_insufficient_cash(mock_record_transaction, client):
     # Given the service reports the CASH balance is too low to fund the buy
-    mock_record_transaction.side_effect = InsufficientCashError('CASH balance 100 is less than purchase cost 1500')
+    mock_record_transaction.side_effect = InsufficientBalanceError('CASH balance 100 is less than purchase cost 1500')
     # When/Then posting that buy returns 422
     response = client.post('/api/transactions', json=_buy_body())
     assert response.status_code == 422
@@ -183,7 +183,7 @@ def test_record_transaction_returns_422_on_insufficient_cash(mock_record_transac
 @patch('routes.transactions.TransactionService.record_transaction')  # mock: replace the service so no real DB call runs
 def test_record_transaction_returns_422_on_insufficient_quantity(mock_record_transaction, client):
     # Given the service reports there isn't enough quantity held to sell
-    mock_record_transaction.side_effect = InsufficientQuantityError("Cannot sell 100 of 'AAPL': only 5 held")
+    mock_record_transaction.side_effect = InsufficientBalanceError("Cannot sell 100 of 'AAPL': only 5 held")
     # When/Then posting that sell returns 422
     response = client.post('/api/transactions', json=_buy_body(type='sell'))
     assert response.status_code == 422

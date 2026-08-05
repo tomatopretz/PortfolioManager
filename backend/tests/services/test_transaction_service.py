@@ -12,12 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from models.PortfolioItemDTO import PortfolioItemDTO
 from models.RecordTransactionRequestDTO import CASH_ASSET_TYPE, CASH_TICKER, RecordTransactionRequestDTO
 from models.TransactionDTO import TransactionDTO
-from services.transaction_service import (
-    InsufficientCashError,
-    InsufficientQuantityError,
-    PortfolioItemNotFoundError,
-    TransactionService,
-)
+from services.transaction_service import InsufficientBalanceError, PortfolioItemNotFoundError, TransactionService
 
 
 def _item(ticker, quantity, cost_basis, asset_type='stock'):
@@ -46,6 +41,31 @@ def _lookup_by_asset_type(cash_item=None, stock_item=None):
     def _lookup(ticker, asset_type, conn=None, for_update=False):
         return cash_item if asset_type == CASH_ASSET_TYPE else stock_item
     return _lookup
+
+
+def _txn(portfolio_item_id, type_, quantity, date=None, price=1, useCash=False):
+    return TransactionDTO(
+        id=str(uuid.uuid4()), portfolioItemId=portfolio_item_id, type=type_, quantity=quantity,
+        price=price, date=date or datetime(2020, 1, 1, tzinfo=timezone.utc), useCash=useCash,
+    )
+
+
+def _seed_history(*items):
+    """Build side_effects for (get_latest_date, list_by_portfolio_item), seeding each item's
+    history with a single old 'buy' transaction reconstructing its current .quantity. Covers
+    both of `_validate_debit`'s paths consistently - the fast path only needs get_latest_date,
+    the slow path needs list_by_portfolio_item too - for tests that aren't specifically
+    exercising the backdated/replay behavior itself."""
+    history = {item.id: [_txn(item.id, 'buy', item.quantity)] for item in items}
+
+    def _latest_date(portfolio_item_id, conn=None):
+        txns = history.get(portfolio_item_id, [])
+        return max((t.date for t in txns), default=None)
+
+    def _list(portfolio_item_id, conn=None):
+        return history.get(portfolio_item_id, [])
+
+    return _latest_date, _list
 
 
 def _fake_repo_add(entity, conn=None):
@@ -91,11 +111,17 @@ def test_list_transactions_filters_by_tickers(mock_list_by_tickers):
 # --- record_transaction: date handling ---------------------------------------------------------
 
 @patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.TransactionRepository.list_by_portfolio_item')  # mock: no real DB call
+@patch('services.transaction_service.TransactionRepository.get_latest_date')  # mock: no real DB call
 @patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
 @patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
-def test_record_transaction_uses_client_supplied_date_when_given(mock_get_item, mock_update_item, mock_add_txn):
+def test_record_transaction_uses_client_supplied_date_when_given(
+    mock_get_item, mock_update_item, mock_latest_date, mock_list_history, mock_add_txn,
+):
     # Given an existing CASH item and a client-supplied backdated date
-    mock_get_item.return_value = _cash_item(quantity=1000, cost_basis=1000)
+    cash = _cash_item(quantity=1000, cost_basis=1000)
+    mock_get_item.return_value = cash
+    mock_latest_date.side_effect, mock_list_history.side_effect = _seed_history(cash)
     backdated = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
     # When recording a withdrawal with that date
@@ -107,11 +133,17 @@ def test_record_transaction_uses_client_supplied_date_when_given(mock_get_item, 
 
 
 @patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.TransactionRepository.list_by_portfolio_item')  # mock: no real DB call
+@patch('services.transaction_service.TransactionRepository.get_latest_date')  # mock: no real DB call
 @patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
 @patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
-def test_record_transaction_defaults_date_to_now_when_omitted(mock_get_item, mock_update_item, mock_add_txn):
+def test_record_transaction_defaults_date_to_now_when_omitted(
+    mock_get_item, mock_update_item, mock_latest_date, mock_list_history, mock_add_txn,
+):
     # Given an existing CASH item and no date on the request
-    mock_get_item.return_value = _cash_item(quantity=1000, cost_basis=1000)
+    cash = _cash_item(quantity=1000, cost_basis=1000)
+    mock_get_item.return_value = cash
+    mock_latest_date.side_effect, mock_list_history.side_effect = _seed_history(cash)
     before = datetime.now(timezone.utc)
 
     # When recording a withdrawal with no date
@@ -221,13 +253,18 @@ def test_buy_asset_existing_item_accumulates_quantity_and_cost_basis(mock_get_it
 
 
 @patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.TransactionRepository.list_by_portfolio_item')  # mock: no real DB call
+@patch('services.transaction_service.TransactionRepository.get_latest_date')  # mock: no real DB call
 @patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
 @patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
-def test_buy_asset_with_cash_deducts_balance_and_records_both_transactions(mock_get_item, mock_update_item, mock_add_txn):
+def test_buy_asset_with_cash_deducts_balance_and_records_both_transactions(
+    mock_get_item, mock_update_item, mock_latest_date, mock_list_history, mock_add_txn,
+):
     # Given a CASH balance and an existing AAPL holding
     cash = _cash_item(quantity=2000, cost_basis=2000)
     stock = _item('AAPL', quantity=5, cost_basis=500, asset_type='STOCK')
     mock_get_item.side_effect = _lookup_by_asset_type(cash_item=cash, stock_item=stock)
+    mock_latest_date.side_effect, mock_list_history.side_effect = _seed_history(cash)
 
     # When buying more AAPL funded from the CASH balance (useCash=True)
     request = _request(type='buy', ticker='aapl', assetType='stock', quantity=10, price=150, useCash=True)
@@ -257,15 +294,19 @@ def test_buy_asset_with_cash_deducts_balance_and_records_both_transactions(mock_
     assert result is stock_txn  # record_transaction returns the primary (stock) transaction
 
 
+@patch('services.transaction_service.TransactionRepository.list_by_portfolio_item')  # mock: no real DB call
+@patch('services.transaction_service.TransactionRepository.get_latest_date')  # mock: no real DB call
 @patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
 @patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
-def test_buy_asset_with_insufficient_cash_raises(mock_get_item, mock_update_item):
+def test_buy_asset_with_insufficient_cash_raises(mock_get_item, mock_update_item, mock_latest_date, mock_list_history):
     # Given a CASH balance too small to cover the purchase
-    mock_get_item.return_value = _cash_item(quantity=100, cost_basis=100)  # not enough for 10*150
+    cash = _cash_item(quantity=100, cost_basis=100)  # not enough for 10*150
+    mock_get_item.return_value = cash
+    mock_latest_date.side_effect, mock_list_history.side_effect = _seed_history(cash)
 
     # When/Then buying with useCash=True raises before touching any row
     request = _request(type='buy', ticker='aapl', assetType='stock', quantity=10, price=150, useCash=True)
-    with pytest.raises(InsufficientCashError):
+    with pytest.raises(InsufficientBalanceError):
         TransactionService.record_transaction(request)
 
     mock_update_item.assert_not_called()  # fails before any mutation happens
@@ -274,11 +315,15 @@ def test_buy_asset_with_insufficient_cash_raises(mock_get_item, mock_update_item
 # --- record_transaction: REMOVE flow (type='sell') ------------------------------------------
 
 @patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.TransactionRepository.list_by_portfolio_item')  # mock: no real DB call
+@patch('services.transaction_service.TransactionRepository.get_latest_date')  # mock: no real DB call
 @patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
 @patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
-def test_withdraw_cash_success(mock_get_item, mock_update_item, mock_add_txn):
+def test_withdraw_cash_success(mock_get_item, mock_update_item, mock_latest_date, mock_list_history, mock_add_txn):
     # Given an existing CASH balance
-    mock_get_item.return_value = _cash_item(quantity=1000, cost_basis=1000)
+    cash = _cash_item(quantity=1000, cost_basis=1000)
+    mock_get_item.return_value = cash
+    mock_latest_date.side_effect, mock_list_history.side_effect = _seed_history(cash)
 
     # When withdrawing part of it
     request = _request(type='sell', ticker='usd', assetType='cash', quantity=300, price=None)
@@ -294,14 +339,18 @@ def test_withdraw_cash_success(mock_get_item, mock_update_item, mock_add_txn):
     assert result.price == 1
 
 
+@patch('services.transaction_service.TransactionRepository.list_by_portfolio_item')  # mock: no real DB call
+@patch('services.transaction_service.TransactionRepository.get_latest_date')  # mock: no real DB call
 @patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
-def test_withdraw_cash_insufficient_raises(mock_get_item):
+def test_withdraw_cash_insufficient_raises(mock_get_item, mock_latest_date, mock_list_history):
     # Given a CASH balance smaller than the requested withdrawal
-    mock_get_item.return_value = _cash_item(quantity=50, cost_basis=50)
+    cash = _cash_item(quantity=50, cost_basis=50)
+    mock_get_item.return_value = cash
+    mock_latest_date.side_effect, mock_list_history.side_effect = _seed_history(cash)
 
     # When/Then withdrawing more than the balance raises
     request = _request(type='sell', ticker='usd', assetType='cash', quantity=100, price=None)
-    with pytest.raises(InsufficientCashError):
+    with pytest.raises(InsufficientBalanceError):
         TransactionService.record_transaction(request)
 
 
@@ -316,25 +365,34 @@ def test_sell_asset_not_found_raises(mock_get_item):
         TransactionService.record_transaction(request)
 
 
+@patch('services.transaction_service.TransactionRepository.list_by_portfolio_item')  # mock: no real DB call
+@patch('services.transaction_service.TransactionRepository.get_latest_date')  # mock: no real DB call
 @patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
-def test_sell_asset_insufficient_quantity_raises(mock_get_item):
+def test_sell_asset_insufficient_quantity_raises(mock_get_item, mock_latest_date, mock_list_history):
     # Given fewer shares held than requested
-    mock_get_item.return_value = _item('AAPL', quantity=3, cost_basis=300, asset_type='STOCK')
+    stock = _item('AAPL', quantity=3, cost_basis=300, asset_type='STOCK')
+    mock_get_item.return_value = stock
+    mock_latest_date.side_effect, mock_list_history.side_effect = _seed_history(stock)
 
     # When/Then selling more than is held raises
     request = _request(type='sell', ticker='aapl', assetType='stock', quantity=5, price=150)
-    with pytest.raises(InsufficientQuantityError):
+    with pytest.raises(InsufficientBalanceError):
         TransactionService.record_transaction(request)
 
 
 @patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.TransactionRepository.list_by_portfolio_item')  # mock: no real DB call
+@patch('services.transaction_service.TransactionRepository.get_latest_date')  # mock: no real DB call
 @patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
 @patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
-def test_sell_asset_credits_cash_and_reduces_cost_basis_proportionally(mock_get_item, mock_update_item, mock_add_txn):
+def test_sell_asset_credits_cash_and_reduces_cost_basis_proportionally(
+    mock_get_item, mock_update_item, mock_latest_date, mock_list_history, mock_add_txn,
+):
     # Given a $100/share average AAPL holding and an existing CASH balance
     stock = _item('AAPL', quantity=10, cost_basis=1000, asset_type='STOCK')  # $100/share average
     cash = _cash_item(quantity=500, cost_basis=500)
     mock_get_item.side_effect = _lookup_by_asset_type(cash_item=cash, stock_item=stock)
+    mock_latest_date.side_effect, mock_list_history.side_effect = _seed_history(stock)
 
     # When selling part of the holding at a different price than the average cost
     request = _request(type='sell', ticker='aapl', assetType='stock', quantity=4, price=120)
@@ -363,15 +421,20 @@ def test_sell_asset_credits_cash_and_reduces_cost_basis_proportionally(mock_get_
 
 
 @patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.TransactionRepository.list_by_portfolio_item')  # mock: no real DB call
+@patch('services.transaction_service.TransactionRepository.get_latest_date')  # mock: no real DB call
 @patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
 @patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
-def test_sell_asset_to_zero_quantity_keeps_item_instead_of_deleting(mock_get_item, mock_update_item, mock_add_txn):
+def test_sell_asset_to_zero_quantity_keeps_item_instead_of_deleting(
+    mock_get_item, mock_update_item, mock_latest_date, mock_list_history, mock_add_txn,
+):
     # transaction.portfolio_item_id is ON DELETE CASCADE, so removing the item here would wipe
     # every transaction ever recorded against it - the item must be kept at quantity 0 instead
     # Given a holding of exactly 5 shares
     stock = _item('AAPL', quantity=5, cost_basis=500, asset_type='STOCK')
     cash = _cash_item()
     mock_get_item.side_effect = _lookup_by_asset_type(cash_item=cash, stock_item=stock)
+    mock_latest_date.side_effect, mock_list_history.side_effect = _seed_history(stock)
 
     # When selling all 5 shares
     request = _request(type='sell', ticker='aapl', assetType='stock', quantity=5, price=150)
@@ -381,3 +444,84 @@ def test_sell_asset_to_zero_quantity_keeps_item_instead_of_deleting(mock_get_ite
     _, updated_stock = (call[0][0] for call in mock_update_item.call_args_list)
     assert updated_stock.quantity == 0
     assert updated_stock.costBasis == 0
+
+
+# --- record_transaction: backdated transactions -----------------------------------------------
+
+@patch('services.transaction_service.TransactionRepository.list_by_portfolio_item')  # mock: no real DB call
+@patch('services.transaction_service.TransactionRepository.get_latest_date')  # mock: no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
+def test_sell_asset_backdated_before_the_buy_that_funded_it_raises(mock_get_item, mock_latest_date, mock_list_history):
+    # Given META was bought today - item.quantity (10) already reflects that buy
+    stock = _item('META', quantity=10, cost_basis=1000, asset_type='STOCK')
+    mock_get_item.return_value = stock
+    today_buy = _txn(stock.id, 'buy', 10, date=datetime(2026, 1, 15, tzinfo=timezone.utc))
+    mock_latest_date.return_value = today_buy.date  # backdated request is < this, so triggers the slow path
+    mock_list_history.return_value = [today_buy]
+
+    # When/Then selling those shares dated *before* the buy raises - at that point in time, on
+    # the actual timeline, nothing had been bought yet
+    request = _request(
+        type='sell', ticker='meta', assetType='stock', quantity=10, price=150,
+        date=datetime(2026, 1, 14, tzinfo=timezone.utc),
+    )
+    with pytest.raises(InsufficientBalanceError):
+        TransactionService.record_transaction(request)
+
+
+@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.TransactionRepository.list_by_portfolio_item')  # mock: no real DB call
+@patch('services.transaction_service.TransactionRepository.get_latest_date')  # mock: no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
+def test_sell_asset_backdated_between_two_buys_still_forces_replay_and_succeeds(
+    mock_get_item, mock_update_item, mock_latest_date, mock_list_history, mock_add_txn,
+):
+    # Given META was bought in two batches: 10 shares on day 1, another 5 on day 20 (15 today)
+    stock = _item('META', quantity=15, cost_basis=1500, asset_type='STOCK')
+    cash = _cash_item()
+    mock_get_item.side_effect = _lookup_by_asset_type(cash_item=cash, stock_item=stock)
+    first_buy = _txn(stock.id, 'buy', 10, date=datetime(2026, 1, 10, tzinfo=timezone.utc))
+    second_buy = _txn(stock.id, 'buy', 5, date=datetime(2026, 1, 20, tzinfo=timezone.utc))
+    mock_latest_date.return_value = second_buy.date  # request date below is earlier -> forces the slow path
+    mock_list_history.return_value = [first_buy, second_buy]
+
+    # When selling some of it dated day 15 - after the first buy, before the second, so this is
+    # a genuinely backdated insertion that only the full replay (not the fast path) can validate
+    request = _request(
+        type='sell', ticker='meta', assetType='stock', quantity=4, price=150,
+        date=datetime(2026, 1, 15, tzinfo=timezone.utc),
+    )
+    result = TransactionService.record_transaction(request)
+
+    # Then it succeeds: replaying buy10 -> sell4 -> buy5 never goes negative (10, 6, 11)
+    assert result.type == 'sell'
+    assert result.quantity == 4
+
+
+@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
+def test_sell_asset_backdated_insertion_that_invalidates_a_later_sell_raises(mock_get_item):
+    # Given a timeline where a sell already relies on an earlier buy to stay non-negative:
+    # buy 10 (day 1) -> sell 8 (day 5), leaving 2 - the day-5 sell was valid against a running
+    # balance of 10 at the time
+    stock = _item('META', quantity=2, cost_basis=200, asset_type='STOCK')
+    mock_get_item.return_value = stock
+    day1_buy = _txn(stock.id, 'buy', 10, date=datetime(2026, 1, 1, tzinfo=timezone.utc))
+    day5_sell = _txn(stock.id, 'sell', 8, date=datetime(2026, 1, 5, tzinfo=timezone.utc))
+
+    with (
+        patch('services.transaction_service.TransactionRepository.get_latest_date') as mock_latest_date,
+        patch('services.transaction_service.TransactionRepository.list_by_portfolio_item') as mock_list_history,
+    ):
+        mock_latest_date.return_value = day5_sell.date  # request date below is earlier -> forces the slow path
+        mock_list_history.return_value = [day1_buy, day5_sell]
+
+        # When/Then inserting a backdated sell of 5 on day 3 is valid in isolation at that point
+        # (10 - 5 = 5 >= 0), but retroactively drives the existing day-5 sell negative
+        # (5 - 8 = -3) - so the whole insertion must be rejected, not just checked at day 3
+        request = _request(
+            type='sell', ticker='meta', assetType='stock', quantity=5, price=150,
+            date=datetime(2026, 1, 3, tzinfo=timezone.utc),
+        )
+        with pytest.raises(InsufficientBalanceError):
+            TransactionService.record_transaction(request)

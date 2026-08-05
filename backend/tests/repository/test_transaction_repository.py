@@ -67,6 +67,44 @@ def test_list_all_returns_every_row(mock_get_cursor):
 
 
 @patch('repository.transaction_repository.get_cursor')  # mock: replace get_cursor so no real DB call happens
+def test_list_by_portfolio_item_returns_matching_rows_in_date_order(mock_get_cursor):
+    # Given a cursor that returns two rows for one portfolio item
+    cursor = MagicMock()
+    item_id = uuid.uuid4()
+    row1, row2 = _row(portfolioItemId=item_id), _row(portfolioItemId=item_id, id=uuid.uuid4(), type='sell')
+    cursor.fetchall.return_value = [row1, row2]
+    _mock_cursor(mock_get_cursor, cursor)
+
+    # When listing that item's transactions
+    result = TransactionRepository.list_by_portfolio_item(str(item_id))
+    # Then every row comes back as a DTO, in the order the query returned them
+    assert [t.id for t in result] == [str(row1['id']), str(row2['id'])]
+
+
+@patch('repository.transaction_repository.get_cursor')  # mock: replace get_cursor so no real DB call happens
+def test_get_latest_date_returns_max_date(mock_get_cursor):
+    # Given a cursor that returns the MAX(date) aggregate
+    cursor = MagicMock()
+    latest = datetime(2026, 7, 20)
+    cursor.fetchone.return_value = {'date': latest}
+    _mock_cursor(mock_get_cursor, cursor)
+
+    # When/Then fetching the latest date for an item returns it
+    assert TransactionRepository.get_latest_date('item-1') == latest
+
+
+@patch('repository.transaction_repository.get_cursor')  # mock: replace get_cursor so no real DB call happens
+def test_get_latest_date_returns_none_when_no_transactions(mock_get_cursor):
+    # Given a cursor that returns no aggregate row (no transactions for that item)
+    cursor = MagicMock()
+    cursor.fetchone.return_value = {'date': None}
+    _mock_cursor(mock_get_cursor, cursor)
+
+    # When/Then fetching the latest date for an item with no history returns None
+    assert TransactionRepository.get_latest_date('item-1') is None
+
+
+@patch('repository.transaction_repository.get_cursor')  # mock: replace get_cursor so no real DB call happens
 def test_add_sets_generated_id(mock_get_cursor):
     from models.TransactionDTO import TransactionDTO
 
