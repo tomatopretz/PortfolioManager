@@ -9,12 +9,7 @@ from models.TransactionDTO import TransactionDTO
 from models.TransactionQueryDTO import TransactionQueryDTO
 from openapi import api
 from services import price_service
-from services.transaction_service import (
-    InsufficientCashError,
-    InsufficientQuantityError,
-    PortfolioItemNotFoundError,
-    TransactionService,
-)
+from services.transaction_service import InsufficientBalanceError, PortfolioItemNotFoundError, TransactionService
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +61,7 @@ def create_transaction() -> tuple[dict, int]:
         created = TransactionService.record_transaction(transaction_request)
     except PortfolioItemNotFoundError as e:
         return {'error': str(e)}, 404
-    except (InsufficientCashError, InsufficientQuantityError) as e:
+    except InsufficientBalanceError as e:
         return {'error': str(e)}, 422
     except Exception as e:
         logger.exception('Failed to create transaction')

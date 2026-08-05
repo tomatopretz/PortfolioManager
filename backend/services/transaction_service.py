@@ -12,16 +12,77 @@ from repository.transaction_repository import TransactionRepository
 from utils.rounding import round_money
 
 
-class InsufficientCashError(ValueError):
-    """Raised when a buy (useCash=True) or a cash withdrawal exceeds the available CASH balance."""
-
-
-class InsufficientQuantityError(ValueError):
-    """Raised when a sell requests more quantity than the PortfolioItem currently holds."""
+class InsufficientBalanceError(ValueError):
+    """Raised when a debit (funded buy, withdrawal, or sell) exceeds CASH or quantity available."""
 
 
 class PortfolioItemNotFoundError(LookupError):
     """Raised when selling a ticker (or withdrawing CASH) with no existing PortfolioItem."""
+
+
+_EPSILON = 1e-9  # tolerance for float rounding noise when comparing a running balance to zero
+
+
+class TransactionService:
+    """Business logic for transactions - the source of truth that PortfolioItem balances are derived from."""
+
+    @staticmethod
+    def list_transactions(tickers: Optional[list[str]] = None) -> list[TransactionDTO]:
+        """List all recorded transactions, optionally filtered to one or more tickers."""
+        if not tickers:
+            return TransactionRepository.list_all()
+        return TransactionRepository.list_by_tickers(tickers)
+
+    @staticmethod
+    def record_transaction(request: RecordTransactionRequestDTO) -> TransactionDTO:
+        """Record a buy (add asset / deposit cash) or sell (remove asset / withdraw cash)."""
+        date = request.date or datetime.now(timezone.utc)
+        with get_transaction() as conn:
+            if request.type == 'buy':
+                return _add_asset(request, date, conn)
+            return _remove_asset(request, date, conn)
+
+
+
+# --- REPLAY logic for debitting cash/asset --------------------------------
+
+def _running_quantities(transactions: list[TransactionDTO]) -> list[float]:
+    """Replay a chronologically-sorted transaction list, returning the running quantity after each one."""
+    running = 0.0
+    history = []
+    for txn in transactions:
+        direction = 1 if txn.type == 'buy' else -1
+        running = round_money(running + direction * txn.quantity)
+        history.append(running)
+    return history
+
+
+def _validate_debit(item: PortfolioItemDTO, amount: float, date: datetime, conn: Connection, label: str) -> None:
+    """Raise InsufficientBalanceError if debiting `amount` from `item` at `date` would ever leave it negative.
+
+    - Cheap reject: a debit anywhere shifts the final balance by -amount, so if today's quantity
+      can't cover it, it's invalid regardless of date - no query needed.
+    - Not backdated: that check alone is enough, since nothing later depends on this point.
+    - Backdated: replay the full history with this inserted, checking every point stays >= 0 -
+      an earlier debit can retroactively invalidate a later transaction even if the final
+      balance still looks fine."""
+    if round_money(item.quantity - amount) < -_EPSILON:
+        raise InsufficientBalanceError(f'{label} {item.quantity} is less than the {amount} required')
+
+    latest_date = TransactionRepository.get_latest_date(item.id, conn=conn)
+    if latest_date is None or date >= latest_date:
+        return
+
+    prospective = TransactionDTO(portfolioItemId=item.id, type='sell', quantity=amount, price=1, date=date)
+    existing = TransactionRepository.list_by_portfolio_item(item.id, conn=conn)
+    # combine and sort by date, so the new debit is in the right place
+    combined = sorted(existing + [prospective], key=lambda t: t.date) 
+    for txn, balance in zip(combined, _running_quantities(combined)):
+        if balance < -_EPSILON:
+            raise InsufficientBalanceError(
+                f'{label} would go negative ({balance}) as of the {txn.date} transaction'
+            )
+# --- Cash helpers - debit and credit cash --------------------------------
 
 
 def _is_cash(request: RecordTransactionRequestDTO) -> bool:
@@ -33,9 +94,7 @@ def _record_cash_movement(
     cash_id: str, movement_type: Literal['buy', 'sell'], amount: float, date: datetime, conn: Connection,
     useCash: bool = False,
 ) -> TransactionDTO:
-    """Insert a Transaction row for a change to the CASH item's balance - covers direct
-    deposits/withdrawals (useCash=False, the default) and the cash side of a stock/bond buy
-    or sell (useCash=True: this movement only happened because a trade caused it)."""
+    """Insert a Transaction row for a change to the CASH item's balance."""
     return TransactionRepository.add(
         TransactionDTO(
             portfolioItemId=cash_id,
@@ -50,8 +109,7 @@ def _record_cash_movement(
 
 
 def _get_cash_item(conn: Connection) -> PortfolioItemDTO:
-    """Fetch the CASH item (locked for update - see record_transaction's docstring for why),
-    creating it with a zero balance if this is the first-ever movement."""
+    """Fetch the CASH item (locked for update), creating it with a zero balance if it doesn't exist yet."""
     cash = PortfolioItemRepository.get_by_ticker_and_asset_type(
         CASH_TICKER, CASH_ASSET_TYPE, conn=conn, for_update=True,
     )
@@ -63,36 +121,45 @@ def _get_cash_item(conn: Connection) -> PortfolioItemDTO:
     )
 
 
+def _debit_cash(
+    amount: float, date: datetime, conn: Connection, useCash: bool, cash: Optional[PortfolioItemDTO] = None,
+) -> TransactionDTO:
+    """Validate + apply a cash debit. Pass `cash` in if the caller already holds it locked (see `_sell_asset`)."""
+    cash = cash or _get_cash_item(conn)
+    _validate_debit(cash, amount, date, conn, label='CASH balance')
+
+    cash.quantity = round_money(cash.quantity - amount)
+    cash.costBasis = round_money(cash.costBasis - amount)  # cash costBasis always mirrors quantity 1:1
+    PortfolioItemRepository.update(cash, conn=conn)
+    return _record_cash_movement(cash.id, 'sell', amount, date, conn, useCash=useCash)
+
+
+def _credit_cash(
+    amount: float, date: datetime, conn: Connection, useCash: bool, cash: Optional[PortfolioItemDTO] = None,
+) -> TransactionDTO:
+    """Apply a cash credit - no validation needed, credits can't go negative."""
+    cash = cash or _get_cash_item(conn)
+    cash.quantity = round_money(cash.quantity + amount)
+    cash.costBasis = round_money(cash.costBasis + amount)  # cash costBasis always mirrors quantity 1:1
+    PortfolioItemRepository.update(cash, conn=conn)
+    return _record_cash_movement(cash.id, 'buy', amount, date, conn, useCash=useCash)
+
+
 # --- ADD flow (type='buy'): buy stock/bond, or deposit cash --------------------------------
 
 def _add_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Connection) -> TransactionDTO:
     if _is_cash(request):
-        return _deposit_cash(request, date, conn)
+        return _credit_cash(request.quantity, date, conn, useCash=False)
     return _buy_asset(request, date, conn)
 
 
-def _deposit_cash(request: RecordTransactionRequestDTO, date: datetime, conn: Connection) -> TransactionDTO:
-    cash = _get_cash_item(conn)
-    cash.quantity = round_money(cash.quantity + request.quantity)
-    cash.costBasis = round_money(cash.costBasis + request.quantity)  # cash costBasis is always 1:1 with quantity
-    PortfolioItemRepository.update(cash, conn=conn)
-
-    return _record_cash_movement(cash.id, 'buy', request.quantity, date, conn)
-
-
 def _buy_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Connection) -> TransactionDTO:
+    # 1. debit CASH first, if this purchase is funded from the balance
     if request.useCash:
-        cash = _get_cash_item(conn)
         cost = round_money(request.quantity * request.price)
-        if cash.quantity < cost:
-            raise InsufficientCashError(
-                f'CASH balance {cash.quantity} is less than purchase cost {cost}'
-            )
-        cash.quantity = round_money(cash.quantity - cost)
-        cash.costBasis = round_money(cash.costBasis - cost)  # cash costBasis always mirrors quantity 1:1
-        PortfolioItemRepository.update(cash, conn=conn)
-        _record_cash_movement(cash.id, 'sell', cost, date, conn, useCash=True)
+        _debit_cash(cost, date, conn, useCash=True)
 
+    # 2. update the existing holding, or create it on the first buy of this ticker
     item = PortfolioItemRepository.get_by_ticker_and_asset_type(
         request.ticker, request.assetType, conn=conn, for_update=True,
     )
@@ -111,6 +178,7 @@ def _buy_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Conne
             conn=conn,
         )
 
+    # 3. record the buy itself
     return TransactionRepository.add(
         TransactionDTO(
             portfolioItemId=item.id,
@@ -128,26 +196,12 @@ def _buy_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Conne
 
 def _remove_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Connection) -> TransactionDTO:
     if _is_cash(request):
-        return _withdraw_cash(request, date, conn)
+        return _debit_cash(request.quantity, date, conn, useCash=False)
     return _sell_asset(request, date, conn)
 
 
-def _withdraw_cash(request: RecordTransactionRequestDTO, date: datetime, conn: Connection) -> TransactionDTO:
-    cash = _get_cash_item(conn)
-    if cash.quantity < request.quantity:
-        raise InsufficientCashError(
-            f'CASH balance {cash.quantity} is less than withdrawal amount {request.quantity}'
-        )
-    cash.quantity = round_money(cash.quantity - request.quantity)
-    cash.costBasis = round_money(cash.costBasis - request.quantity)
-    PortfolioItemRepository.update(cash, conn=conn)
-
-    return _record_cash_movement(cash.id, 'sell', request.quantity, date, conn)
-
-
 def _sell_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Connection) -> TransactionDTO:
-    # lock CASH before the stock/bond row, same order _buy_asset uses - see point 3 in
-    # record_transaction's docstring for why the order has to match across code paths
+    # 1. lock CASH before the stock/bond row, same order _buy_asset uses (avoids deadlock)
     cash = _get_cash_item(conn)
     item = PortfolioItemRepository.get_by_ticker_and_asset_type(
         request.ticker, request.assetType, conn=conn, for_update=True,
@@ -156,23 +210,22 @@ def _sell_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Conn
         raise PortfolioItemNotFoundError(
             f"No portfolio item found for ticker '{request.ticker}' ({request.assetType})"
         )
-    if item.quantity < request.quantity:
-        raise InsufficientQuantityError(
-            f"Cannot sell {request.quantity} of '{request.ticker}': only {item.quantity} held"
-        )
 
+    # 2. make sure this sell doesn't drive the holding negative, now or historically
+    _validate_debit(item, request.quantity, date, conn, label=f"'{request.ticker}' quantity")
+
+    # 3. credit the proceeds to CASH
     proceeds = round_money(request.quantity * request.price)
-    cash.quantity = round_money(cash.quantity + proceeds)
-    cash.costBasis = round_money(cash.costBasis + proceeds)  # cash costBasis always mirrors quantity 1:1
-    PortfolioItemRepository.update(cash, conn=conn)
-    _record_cash_movement(cash.id, 'buy', proceeds, date, conn, useCash=True)
+    _credit_cash(proceeds, date, conn, useCash=True, cash=cash)
 
+    # 4. reduce the holding, carrying the average cost basis over to what remains
     cost_basis_per_share = item.costBasis / item.quantity
     new_quantity = round_money(item.quantity - request.quantity)
     item.costBasis = round_money(cost_basis_per_share * new_quantity)
     item.quantity = new_quantity
     PortfolioItemRepository.update(item, conn=conn)
 
+    # 5. record the sell itself
     return TransactionRepository.add(
         TransactionDTO(
             portfolioItemId=item.id,
@@ -184,28 +237,3 @@ def _sell_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Conn
         ),
         conn=conn,
     )
-
-
-class TransactionService:
-    """Business logic for transactions - the source of truth that PortfolioItem balances are
-    derived from."""
-
-    @staticmethod
-    def list_transactions(tickers: Optional[list[str]] = None) -> list[TransactionDTO]:
-        """List all recorded transactions, optionally filtered to one or more tickers."""
-        if not tickers:
-            return TransactionRepository.list_all()
-        return TransactionRepository.list_by_tickers(tickers)
-
-    @staticmethod
-    def record_transaction(request: RecordTransactionRequestDTO) -> TransactionDTO:
-        """Record a buy (add asset / deposit cash) or sell (remove asset / withdraw cash).
-
-        This touches two rows (CASH and/or a stock/bond PortfolioItem) plus one or two new
-        Transaction rows, and has to stay correct even when many requests hit it at once.
-        """
-        date = request.date or datetime.now(timezone.utc)
-        with get_transaction() as conn:
-            if request.type == 'buy':
-                return _add_asset(request, date, conn)
-            return _remove_asset(request, date, conn)

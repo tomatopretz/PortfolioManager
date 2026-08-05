@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from psycopg import Connection
@@ -39,6 +40,23 @@ class TransactionRepository:
         with get_cursor() as cur:
             cur.execute(f'SELECT {_COLUMNS} FROM {TABLE} ORDER BY date DESC')
             return [_row_to_transaction(row) for row in cur.fetchall()]
+
+    @staticmethod
+    def list_by_portfolio_item(portfolio_item_id: str, conn: Optional[Connection] = None) -> list[TransactionDTO]:
+        with get_cursor(conn) as cur:
+            cur.execute(
+                f'SELECT {_COLUMNS} FROM {TABLE} WHERE portfolio_item_id = %s ORDER BY date',
+                (portfolio_item_id,),
+            )
+            return [_row_to_transaction(row) for row in cur.fetchall()]
+
+    @staticmethod
+    def get_latest_date(portfolio_item_id: str, conn: Optional[Connection] = None) -> Optional[datetime]:
+        """Latest transaction date on record for one item - a cheap indexed MAX() instead of
+        fetching the whole history"""
+        with get_cursor(conn) as cur:
+            cur.execute(f'SELECT MAX(date) AS date FROM {TABLE} WHERE portfolio_item_id = %s', (portfolio_item_id,))
+            return cur.fetchone()['date']
 
     @staticmethod
     def list_by_tickers(tickers: list[str]) -> list[TransactionDTO]:
