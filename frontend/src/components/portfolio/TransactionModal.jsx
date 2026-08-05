@@ -177,6 +177,7 @@ function TransactionModal({ mode, isOpen, onClose, onSubmit }) {
           label="Date of Transaction"
           type="date"
           value={formData.date}
+          max={todayIso()}
           onChange={handleFieldChange}
         />
 
