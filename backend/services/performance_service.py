@@ -27,7 +27,9 @@ class PerformanceService:
     @staticmethod
     def get_performance() -> PerformanceHistoryResultDTO:
         """Return chart-ready portfolio value points for all supported ranges."""
-        transactions = sorted(TransactionService.list_transactions(), key=lambda txn: txn.date)
+        # Sort on the UTC-normalized timestamp: Postgres returns timestamptz as tz-aware, and
+        # sorting a naive/aware mix raises TypeError outright.
+        transactions = sorted(TransactionService.list_transactions(), key=lambda txn: _to_naive_utc(txn.date))
 
         if not transactions:
             return PerformanceHistoryResultDTO(ranges={key: [] for key in RANGE_KEYS})
@@ -38,12 +40,13 @@ class PerformanceService:
         priced_tickers = _priced_tickers(transactions, tickers_by_item_id)
         today = _today()
         now = _now()
-        earliest_transaction_date = transactions[0].date.date()
+        earliest_transaction_date = _to_naive_utc(transactions[0].date).date()
         daily_start = min(earliest_transaction_date, _daily_range_start(today, '1Y'))
 
         daily_prices = price_service.get_daily_price_history(priced_tickers, daily_start, today)
         intraday_prices = price_service.get_intraday_price_history(priced_tickers)
-        latest_value = _latest_intraday_value(current_holdings, intraday_prices, daily_prices, now)
+        current_prices = price_service.list_current_prices(priced_tickers) if priced_tickers else {}
+        latest_value = _latest_value(current_holdings, current_prices, intraday_prices, daily_prices, now)
 
         ranges = {
             '1D': _build_intraday_range(
@@ -53,6 +56,7 @@ class PerformanceService:
                 daily_prices,
                 current_holdings,
                 now,
+                latest_value,
             ),
             '1W': _build_daily_range(
                 transactions,
@@ -108,8 +112,13 @@ class PerformanceService:
 
 
 def _today() -> date:
-    """Return today's date; isolated for deterministic tests."""
-    return date.today()
+    """Return today's date in UTC; isolated for deterministic tests.
+
+    UTC rather than the local clock: _now(), the intraday price timestamps and the transaction
+    buckets are all UTC. A local "today" that is a day ahead of (or behind) the UTC one puts the
+    daily ranges on a different calendar to everything they are compared against.
+    """
+    return _now().date()
 
 
 def _now() -> datetime:
@@ -203,15 +212,27 @@ def _build_daily_range(
     end_date: date,
 ) -> list[PerformancePointDTO]:
     """Build daily value points by walking current holdings backward through transactions."""
+    # A transaction dated after end_date - future-dated (the API allows it), or simply recorded
+    # from a timezone where it is already tomorrow in UTC - makes the ALL range's start later
+    # than its end, and the loop below then yields no points at all. That renders as "no
+    # performance data" on the dashboard's default range rather than as a chart, so clamp
+    # instead and always produce at least the end_date point.
+    start_date = min(start_date, end_date)
+
     points = []
     holdings = current_holdings.copy()
-    sorted_transactions = sorted(transactions, key=lambda txn: txn.date)
+    sorted_transactions = sorted(transactions, key=lambda txn: _to_naive_utc(txn.date))
+    # Bucket by UTC date, the same normalization _build_intraday_range applies. Postgres hands
+    # back timestamptz as tz-aware, so a bare .date() puts a late-evening trade on the wrong
+    # day here while the 1D range puts it on the right one - and sorting a naive/aware mix
+    # raises outright.
+    txn_dates = [_to_naive_utc(txn.date).date() for txn in sorted_transactions]
     price_indexes = _build_price_indexes(daily_prices)
     txn_index = len(sorted_transactions) - 1
 
     current_date = end_date
     while current_date >= start_date:
-        while txn_index >= 0 and sorted_transactions[txn_index].date.date() > current_date:
+        while txn_index >= 0 and txn_dates[txn_index] > current_date:
             _apply_transaction(holdings, sorted_transactions[txn_index], tickers_by_item_id, reverse=True)
             txn_index -= 1
 
@@ -235,6 +256,7 @@ def _build_intraday_range(
     daily_prices: dict[str, dict[date, float]],
     current_holdings: dict[str, float],
     now: datetime,
+    latest_value: float | None = None,
 ) -> list[PerformancePointDTO]:
     """Chart the true last 24 hours: real bars while the market was open in that window,
     held flat off the last known price for any part of the window the market was closed.
@@ -274,7 +296,11 @@ def _build_intraday_range(
                 # timestamp is naive but was normalized to UTC above; mark it explicitly so
                 # the client doesn't parse it as its own local time.
                 date=timestamp.isoformat() + 'Z',
-                value=_calculate_value(
+                # The point at `now` uses the live valuation, exactly as the daily ranges do,
+                # so all six ranges end on the same number as the header total.
+                value=latest_value
+                if latest_value is not None and timestamp == now
+                else _calculate_value(
                     holdings,
                     intraday_prices,
                     intraday_price_indexes,
@@ -314,25 +340,46 @@ def _apply_transaction(holdings, txn, tickers_by_item_id: dict[str, str], revers
 # --- Valuation helpers --------------------------------------------------------
 
 
-def _latest_intraday_value(
+def _latest_value(
     current_holdings: dict[str, float],
+    current_prices: dict[str, float],
     intraday_prices: dict[str, dict[datetime, float]],
     daily_prices: dict[str, dict[date, float]],
     now: datetime,
-) -> float | None:
-    """Value current holdings with intraday prices, falling back to daily prices."""
-    if not any(intraday_prices.values()):
-        return None
+) -> float:
+    """Value current holdings with the same live prices GET /api/portfolio uses, so the final
+    point of every range matches the header total by construction.
 
-    intraday_prices = _normalize_intraday_prices(intraday_prices)
-    return _calculate_value(
-        current_holdings,
-        intraday_prices,
-        _build_price_indexes(intraday_prices),
-        now,
-        fallback_price_history=daily_prices,
-        fallback_price_indexes=_build_price_indexes(daily_prices),
-    )
+    The two used to be computed from different bars - a 5-minute intraday bar here against a
+    live quote there - which left the chart trailing the header by a few dollars all through
+    the trading day, for no reason a user could see.
+
+    Falls back per ticker to the most recent intraday bar, then the most recent daily close,
+    for anything the live fetch couldn't resolve.
+    """
+    intraday = _normalize_intraday_prices(intraday_prices)
+    intraday_indexes = _build_price_indexes(intraday)
+    daily_indexes = _build_price_indexes(daily_prices)
+
+    total = current_holdings.get(CASH_TICKER, 0.0)
+
+    for ticker, quantity in current_holdings.items():
+        if ticker == CASH_TICKER or quantity <= 0:
+            continue
+
+        price = current_prices.get(ticker)
+        if price is None:
+            price = _latest_price_on_or_before(
+                intraday.get(ticker, {}), intraday_indexes.get(ticker, []), now
+            )
+        if price is None:
+            price = _latest_price_on_or_before(
+                daily_prices.get(ticker, {}), daily_indexes.get(ticker, []), now.date()
+            )
+        if price is not None:
+            total += quantity * price
+
+    return round(total, 2)
 
 
 def _normalize_intraday_prices(intraday_prices: dict[str, dict[datetime, float]]) -> dict[str, dict[datetime, float]]:

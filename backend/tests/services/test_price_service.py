@@ -206,6 +206,57 @@ def test_get_daily_price_history_skips_implausible_prices(mock_download):
     }
 
 
+@patch('services.price_service.time.sleep')  # mock: skip the retry backoff so the test runs instantly
+@patch('services.price_service.yf.download')  # mock: replace yfinance's batch download so no real network call happens
+def test_get_daily_price_history_retries_tickers_missing_from_the_batch(mock_download, mock_sleep):
+    # Given Yahoo omits MSFT from the first response, then resolves it when asked again
+    mock_download.side_effect = [
+        _download_df({'AAPL': [190.0, 191.0]}),
+        _download_df({'MSFT': [500.0, 505.0]}),
+    ]
+
+    # When fetching daily history for both
+    result = get_daily_price_history(['AAPL', 'MSFT'], date(2026, 7, 30), date(2026, 7, 31))
+
+    # Then the transient miss is retried rather than left to value the holding at zero
+    assert result == {
+        'AAPL': {date(2026, 7, 30): 190.0, date(2026, 7, 31): 191.0},
+        'MSFT': {date(2026, 7, 30): 500.0, date(2026, 7, 31): 505.0},
+    }
+    assert mock_download.call_count == 2
+    # and the retry asks only for the ticker that was actually missing
+    assert mock_download.call_args_list[1].args[0] == ['MSFT']
+
+
+@patch('services.price_service.time.sleep')  # mock: skip the retry backoff so the test runs instantly
+@patch('services.price_service.yf.download')  # mock: replace yfinance's batch download so no real network call happens
+def test_get_daily_price_history_gives_up_after_max_attempts(mock_download, mock_sleep):
+    # Given MSFT never comes back, however many times it's asked for
+    mock_download.return_value = _download_df({'AAPL': [190.0, 191.0]})
+
+    # When fetching daily history for both
+    result = get_daily_price_history(['AAPL', 'MSFT'], date(2026, 7, 30), date(2026, 7, 31))
+
+    # Then it stops after the attempt limit and reports the ticker as having no history
+    assert result['MSFT'] == {}
+    assert mock_download.call_count == 3
+
+
+@patch('services.price_service.yf.download')  # mock: replace yfinance's batch download so no real network call happens
+def test_list_current_prices_requests_unadjusted_closes(mock_download):
+    # Given a normal single-ticker response
+    columns = pd.MultiIndex.from_tuples([('AAPL', 'Close')])
+    mock_download.return_value = pd.DataFrame([[105.5]], columns=columns)
+
+    list_current_prices(['AAPL'])
+
+    # Then the current price is fetched on the same unadjusted basis as the history calls, so
+    # the two can't drift apart around dividends and splits
+    mock_download.assert_called_once_with(
+        ['AAPL'], period='1d', group_by='ticker', auto_adjust=False, progress=False
+    )
+
+
 @patch('services.price_service.yf.Ticker')  # mock: replace yfinance's Ticker so no real network call happens
 def test_get_current_price_returns_latest_close(mock_ticker):
     # Given yfinance returns the latest close
