@@ -145,7 +145,6 @@ frontend/
     │   │   ├── AllocationPieChart.jsx
     │   │   ├── HoldingsPreview.jsx
     │   │   ├── PerformanceChart.jsx
-    │   │   ├── SummaryStats.jsx
     │   │   └── TimeRangeFilter.jsx
     │   ├── holdings/            # Holdings page components
     │   │   ├── FavouriteStar.jsx
@@ -221,7 +220,6 @@ Favouriting is applied optimistically and rolled back if the request fails.
 App (PortfolioProvider + Router)
 └── AppLayout (Sidebar + Header + Outlet)
     ├── DashboardPage
-    │   ├── SummaryStats
     │   ├── AllocationPieChart
     │   ├── PerformanceChart + TimeRangeFilter
     │   ├── HoldingsPreview
