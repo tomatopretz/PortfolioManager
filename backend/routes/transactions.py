@@ -44,6 +44,10 @@ def get_transactions() -> tuple[list[dict], int]:
 
 # GET /api/transactions/export - CSV export generated from backend transaction history.
 @transactions_bp.route('/export', methods=['GET'])
+@api.validate(
+    resp=Response(HTTP_200=None, HTTP_502=ErrorResultDTO, validate=False),
+    tags=['Transactions'],
+)
 def export_transactions() -> tuple[FlaskResponse, int] | tuple[dict, int]:
     """Export transactions as CSV with ticker/type joined from portfolio items."""
     try:
