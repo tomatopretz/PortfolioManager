@@ -20,19 +20,21 @@ def _format_validation_error(_req, resp, req_validation_error, _instance) -> Non
 
 
 class _ApiSpec(FlaskPydanticSpec):
-    _hidden_schemas: set[str] = set()
+    _hidden_schemas: set[str] = set()  # names of models to keep out of the Swagger "Schemas" list
 
     def hide_from_schemas(self, *models: type) -> None:
-        self._hidden_schemas.update(m.__name__ for m in models)
+        self._hidden_schemas.update(m.__name__ for m in models)  # mark model(s) as hidden
 
     def _get_model_definitions(self) -> dict:
+        # library's own "build the Schemas list" method - filter out anything hidden
         return {k: v for k, v in super()._get_model_definitions().items() if k not in self._hidden_schemas}
 
 
+# the one shared instance every route file imports and decorates with @api.validate(...)
 api = _ApiSpec(
     'flask',
     title='Portfolio Manager API',
     version='0.1.0',
     path='apidocs',  # UI at /apidocs/swagger, spec at /apidocs/openapi.json
-    before=_format_validation_error,
+    before=_format_validation_error,  # wires in the custom error-formatting above
 )

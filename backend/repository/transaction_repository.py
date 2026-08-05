@@ -1,9 +1,11 @@
+from datetime import datetime
 from typing import Optional
 
 from psycopg import Connection
 
 from db import get_cursor
 from models.TransactionDTO import TransactionDTO
+from models.RecordTransactionRequestDTO import CASH_ASSET_TYPE
 
 TABLE = 'transaction'
 _COLUMNS = (
@@ -41,13 +43,21 @@ class TransactionRepository:
             return [_row_to_transaction(row) for row in cur.fetchall()]
 
     @staticmethod
-    def list_by_portfolio_item(portfolio_item_id: str) -> list[TransactionDTO]:
-        with get_cursor() as cur:
+    def list_by_portfolio_item(portfolio_item_id: str, conn: Optional[Connection] = None) -> list[TransactionDTO]:
+        with get_cursor(conn) as cur:
             cur.execute(
-                f'SELECT {_COLUMNS} FROM {TABLE} WHERE portfolio_item_id = %s ORDER BY date DESC',
+                f'SELECT {_COLUMNS} FROM {TABLE} WHERE portfolio_item_id = %s ORDER BY date',
                 (portfolio_item_id,),
             )
             return [_row_to_transaction(row) for row in cur.fetchall()]
+
+    @staticmethod
+    def get_latest_date(portfolio_item_id: str, conn: Optional[Connection] = None) -> Optional[datetime]:
+        """Latest transaction date on record for one item - a cheap indexed MAX() instead of
+        fetching the whole history"""
+        with get_cursor(conn) as cur:
+            cur.execute(f'SELECT MAX(date) AS date FROM {TABLE} WHERE portfolio_item_id = %s', (portfolio_item_id,))
+            return cur.fetchone()['date']
 
     @staticmethod
     def list_by_tickers(tickers: list[str]) -> list[TransactionDTO]:
@@ -59,6 +69,21 @@ class TransactionRepository:
                 (tickers,),
             )
             return [_row_to_transaction(row) for row in cur.fetchall()]
+
+    @staticmethod
+    def list_export_rows() -> list[dict]:
+        """Return transaction rows joined to ticker/type for CSV export."""
+        with get_cursor() as cur:
+            cur.execute(
+                f'SELECT t.type, t.quantity, t.price, t.date, t.use_cash AS "useCash", '
+                f'p.ticker, p.asset_type AS "assetType" '
+                f'FROM {TABLE} t '
+                f'JOIN portfolio_item p ON p.id = t.portfolio_item_id '
+                f'WHERE NOT (p.asset_type = %s AND t.use_cash = TRUE) '
+                f'ORDER BY t.date ASC, t.id ASC',
+                (CASH_ASSET_TYPE,),
+            )
+            return cur.fetchall()
 
     @staticmethod
     def add(transaction: TransactionDTO, conn: Optional[Connection] = None) -> TransactionDTO:
@@ -77,27 +102,3 @@ class TransactionRepository:
             )
             transaction.id = str(cur.fetchone()['id'])
         return transaction
-
-    @staticmethod
-    def update(transaction: TransactionDTO) -> TransactionDTO:
-        with get_cursor() as cur:
-            cur.execute(
-                f'UPDATE {TABLE} SET portfolio_item_id = %s, type = %s, quantity = %s, '
-                f'price = %s, date = %s, use_cash = %s WHERE id = %s',
-                (
-                    transaction.portfolioItemId,
-                    transaction.type,
-                    transaction.quantity,
-                    transaction.price,
-                    transaction.date,
-                    transaction.useCash,
-                    transaction.id,
-                ),
-            )
-        return transaction
-
-    @staticmethod
-    def delete(transaction_id: str) -> bool:
-        with get_cursor() as cur:
-            cur.execute(f'DELETE FROM {TABLE} WHERE id = %s', (transaction_id,))
-            return cur.rowcount > 0

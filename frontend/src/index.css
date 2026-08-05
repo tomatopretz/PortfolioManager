@@ -3,108 +3,63 @@
 @import 'tailwindcss';
 @config '../tailwind.config.js';
 
+/*
+ * Theme tokens are declared once with `light-dark()`, so the light and dark palettes live
+ * side by side instead of being repeated in a `[data-theme='dark']` block and again inside a
+ * `prefers-color-scheme` media query.
+ *
+ * `color-scheme: light dark` makes the pair follow the OS by default; setting
+ * `data-theme="light" | "dark"` on <html> pins it, and also gives native form controls and
+ * scrollbars the matching appearance.
+ */
 :root {
-  /* Light grey background with white cards */
-  --surface-1: #ffffff;
-  --surface-2: #f8f8f8;
-  --surface-3: #f0f0f0;
-  --bg-main: #f5f5f5;
+  color-scheme: light dark;
 
-  /* Text colors */
-  --text-primary: #1a1a1a;
-  --text-secondary: #666666;
-  --text-muted: #999999;
+  /* Surfaces */
+  --surface-1: light-dark(#ffffff, #1f2937);
+  --surface-2: light-dark(#f8f8f8, #111827);
+  --surface-3: light-dark(#f0f0f0, #374151);
+  --bg-main: light-dark(#f5f5f5, #0f172a);
 
-  /* Blue accent */
+  /* Text */
+  --text-primary: light-dark(#1a1a1a, #ffffff);
+  --text-secondary: light-dark(#666666, #d1d5db);
+  --text-muted: light-dark(#999999, #9ca3af);
+
+  /* Accent */
   --primary: #2563eb;
-  --primary-light: #3b82f6;
   --primary-dark: #1d4ed8;
 
-  /* Series colors (updated to harmonize with purple) */
-  --series-1: #7c5ac2;   /* amethyst purple */
-  --series-2: #d97760;   /* coral */
-  --series-3: #5eb896;   /* sage green */
-  --series-4: #d4a940;   /* gold */
-  --series-5: #b8739f;   /* mauve */
-  --series-6: #5a9bb8;   /* slate blue */
-  --series-7: #9d7c8f;   /* dusty purple */
-  --series-8: #c85c5c;   /* muted red */
-
-  --series-other: #d4ceca;
-
+  /* Status */
   --status-good: #10b981;
   --status-warning: #f59e0b;
   --status-serious: #ef4444;
-  --status-critical: #dc2626;
 
-  --gridline: #e5e7eb;
-  --border: rgba(0, 0, 0, 0.08);
-  --delta-good: #10b981;
-
-  /* Shadows */
+  /* Lines and elevation */
+  --gridline: light-dark(#e5e7eb, #4b5563);
+  --border: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.1));
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
 }
 
-html.dark,
-html[data-theme='dark'],
-:root[data-theme='dark'] {
-  --surface-1: #1f2937;
-  --surface-2: #111827;
-  --surface-3: #374151;
-  --bg-main: #0f172a;
-
-  --text-primary: #ffffff;
-  --text-secondary: #d1d5db;
-  --text-muted: #9ca3af;
-
-  --series-1: #3b82f6;   /* blue */
-  --series-2: #f97316;   /* orange */
-  --series-3: #10b981;   /* aqua */
-  --series-4: #eab308;   /* yellow */
-  --series-5: #ec4899;   /* magenta */
-  --series-6: #22c55e;   /* green */
-  --series-7: #8b5cf6;   /* violet */
-  --series-8: #ef4444;   /* red */
-
-  --series-other: #6b7280; /* gray for "Other" */
-
-  --gridline: #4b5563;
-  --border: rgba(255, 255, 255, 0.10);
-  --delta-good: #10b981;
+:root[data-theme='light'] {
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --surface-1: #1f2937;
-    --surface-2: #111827;
-    --surface-3: #374151;
-    --bg-main: #0f172a;
-
-    --text-primary: #ffffff;
-    --text-secondary: #d1d5db;
-    --text-muted: #9ca3af;
-
-    --series-1: #3b82f6;   /* blue */
-    --series-2: #f97316;   /* orange */
-    --series-3: #10b981;   /* aqua */
-    --series-4: #eab308;   /* yellow */
-    --series-5: #ec4899;   /* magenta */
-    --series-6: #22c55e;   /* green */
-    --series-7: #8b5cf6;   /* violet */
-    --series-8: #ef4444;   /* red */
-
-    --series-other: #6b7280; /* gray for "Other" */
-
-    --gridline: #4b5563;
-    --border: rgba(255, 255, 255, 0.10);
-    --delta-good: #10b981;
-  }
+:root[data-theme='dark'] {
+  color-scheme: dark;
 }
 
 * {
   box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
 }
 
 body {
@@ -116,24 +71,21 @@ body {
   letter-spacing: -0.3px;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.font-display {
   font-family: 'Sora', -apple-system, sans-serif;
   font-weight: 600;
   letter-spacing: -0.5px;
 }
 
-html, body, #root {
-  height: 100%;
-  width: 100%;
-}
-
-/* Recharts-specific styling */
+/* Recharts renders its own SVG chrome, which has to be told about the theme tokens. */
 .recharts-wrapper {
-  background-color: transparent !important;
-}
-
-.recharts-surface {
-  background-color: var(--surface-1) !important;
+  background-color: transparent;
 }
 
 .recharts-text {
@@ -143,88 +95,4 @@ html, body, #root {
 .recharts-cartesian-axis-tick {
   fill: var(--text-muted);
   font-size: 12px;
-}
-
-.recharts-default-tooltip {
-  background-color: var(--surface-1) !important;
-  border: 1px solid var(--gridline) !important;
-  border-radius: 4px;
-  padding: 8px !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-.recharts-tooltip-label {
-  color: var(--text-primary);
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.recharts-tooltip-item {
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-/* Animations */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fadeInLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.5s ease-out forwards;
-}
-
-.animate-fade-in-left {
-  animation: fadeInLeft 0.5s ease-out forwards;
-}
-
-/* Stagger animations */
-.space-y-8 > * {
-  animation: fadeIn 0.5s ease-out forwards;
-}
-
-.space-y-8 > *:nth-child(1) { animation-delay: 0ms; }
-.space-y-8 > *:nth-child(2) { animation-delay: 100ms; }
-.space-y-8 > *:nth-child(3) { animation-delay: 200ms; }
-.space-y-8 > *:nth-child(4) { animation-delay: 300ms; }
-.space-y-8 > *:nth-child(5) { animation-delay: 400ms; }
-
-/* Smooth transitions */
-button {
-  transition: all 0.2s ease-out;
-}
-
-button:hover {
-  transform: translateY(-1px);
-}
-
-button:active {
-  transform: translateY(0);
-}
-
-/* Table row hover effects */
-table tbody tr {
-  transition: background-color 0.15s ease-out;
-}
-
-/* Sidebar navigation hover */
-a[class*='flex items-center gap-3'] {
-  transition: all 0.2s ease-out;
 }

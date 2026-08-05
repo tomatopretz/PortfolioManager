@@ -1,22 +1,64 @@
 # Portfolio Manager - Frontend
 
-A modern, responsive React-based frontend for the Portfolio Manager application. Built with Vite, TypeScript, React Router, and Tailwind CSS to provide a fast, scalable user interface for managing investment portfolios.
+A modern, responsive React-based frontend for the Portfolio Manager application. Built with Vite, React Router and Tailwind CSS to provide a fast, scalable user interface for managing investment portfolios.
+
+## Overview
+
+The frontend is a single-page app with three routes, one shared portfolio state container, and a
+services layer that can be pointed at either the Flask backend or an in-memory mock. Every page
+reads the same portfolio state through React Context, so a trade made from the header refreshes
+the dashboard, the holdings table and the transaction history together.
+
+```mermaid
+flowchart TD
+    Browser["Browser"] --> App["App.jsx<br/>Router + PortfolioProvider"]
+
+    App --> Layout["AppLayout<br/>Sidebar + Header + Outlet"]
+    Layout --> Dashboard["DashboardPage<br/>/"]
+    Layout --> Holdings["HoldingsPage<br/>/holdings"]
+    Layout --> Transactions["TransactionHistoryPage<br/>/transactions"]
+
+    Dashboard --> Context["PortfolioContext<br/>usePortfolioContext"]
+    Holdings --> Context
+    Transactions --> Context
+
+    Context --> Hook["usePortfolio<br/>items, performance, totals, actions"]
+    Hook --> Async["useAsyncResource<br/>loading / error / stale-response guard"]
+    Async --> Services["services/index.js<br/>mock or real, by env flag"]
+
+    Services --> Real["portfolioService.js"]
+    Services --> Mock["mockPortfolioService.js<br/>VITE_USE_MOCKS=true"]
+    Real --> Api["api.js<br/>fetch wrapper + ApiError"]
+    Api --> Backend["Backend<br/>Flask API"]
+```
+
+Layer responsibilities:
+
+| Layer | Location | Responsibility |
+| --- | --- | --- |
+| Pages | `src/pages/` | One per route; own page-local UI state (filters, sorting, modals) |
+| Components | `src/components/` | Presentational building blocks, grouped by feature |
+| State | `src/context/`, `src/hooks/` | A single portfolio store shared by every page |
+| Services | `src/services/` | Data fetching, backend/mock selection, response shaping |
+| Domain helpers | `src/constants/`, `src/utils/` | Shared constants, formatting and portfolio/transaction logic |
+
+See [../docs/Architecture.md](../docs/Architecture.md) for how the frontend fits into the wider system.
 
 ## Tech Stack
 
 - **React 19** - UI library for building component-based interfaces
-- **Vite 8** - Lightning-fast build tool and dev server
-- **TypeScript** - Type-safe JavaScript for better development experience
+- **Vite 8** - Build tool and dev server
 - **React Router DOM 7** - Client-side routing and navigation
-- **Tailwind CSS 4** - Utility-first CSS framework for styling
+- **Tailwind CSS 4** - Utility-first CSS framework, wired up through `@tailwindcss/postcss`
 - **Recharts 3** - Composable React chart library for data visualization
+- **TypeScript 6** - Used as a type checker over the JS/JSX sources (`allowJs`, `noEmit`); there are no `.ts` source files
 - **PostCSS & Autoprefixer** - CSS processing and browser compatibility
 
 ## Setup
 
 ### Prerequisites
 
-- Node.js 18+ and npm/yarn
+- Node.js 18+ and npm
 - Git
 
 ### Installation
@@ -31,6 +73,18 @@ A modern, responsive React-based frontend for the Portfolio Manager application.
    npm install
    ```
 
+3. Create a `.env` from the example and adjust as needed:
+   ```bash
+   cp .env.example .env
+   ```
+
+### Environment Variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `VITE_API_URL` | `http://localhost:5000` | Base URL of the Flask backend |
+| `VITE_USE_MOCKS` | – | Set to `true` to run the UI against in-memory fixtures with no backend |
+
 ## Running the Application
 
 ### Development Server
@@ -41,11 +95,18 @@ Start the Vite development server with hot module replacement (HMR):
 npm run dev
 ```
 
-The application will typically be available at `http://localhost:5173` and will automatically reload when you make changes.
+The app is served at `http://localhost:3001` (configured in `vite.config.js`, which also opens a
+browser automatically) and reloads when you make changes.
+
+### Type Checking
+
+```bash
+npm run typecheck
+```
 
 ### Production Build
 
-Create an optimized production build:
+Create an optimized production build. This runs `tsc` first, so type errors fail the build:
 
 ```bash
 npm run build
@@ -55,8 +116,6 @@ The built files will be in the `dist/` directory.
 
 ### Preview Production Build
 
-Preview the production build locally:
-
 ```bash
 npm run preview
 ```
@@ -64,159 +123,200 @@ npm run preview
 ## Project Structure
 
 ```
-frontend/src/
-├── components/
-│   ├── common/              # Reusable UI components
-│   │   ├── EmptyState.jsx
-│   │   ├── LoadingSpinner.jsx
-│   │   └── StatTile.jsx
-│   ├── dashboard/           # Dashboard-specific components
-│   │   ├── AllocationPieChart.jsx
-│   │   ├── AssetBreakdown.jsx
-│   │   ├── HoldingsPreview.jsx
-│   │   ├── PerformanceChart.jsx
-│   │   ├── SummaryStats.jsx
-│   │   └── TimeRangeFilter.jsx
-│   └── layout/              # Layout and navigation components
-│       ├── AppLayout.jsx    # Main app wrapper with routes
-│       ├── Header.jsx
-│       ├── NavMenu.jsx
-│       └── Sidebar.jsx
-├── pages/                   # Page-level components (route components)
-│   ├── DashboardPage.jsx    # Main dashboard view
-│   ├── HoldingsPage.jsx     # Holdings list and details
-│   └── PerformancePage.jsx  # Performance analytics
-├── services/                # API and data services
-│   ├── api.js              # API client configuration
-│   ├── index.js            # Service exports and mock/real service selection
-│   ├── portfolioService.js # Portfolio data service
-│   ├── mockPortfolioService.js # Mock implementation for development
-│   └── mockData.js         # Mock data and enrichment utilities
-├── context/                 # React Context for state management
-│   └── PortfolioContext.jsx # Global portfolio context
-├── hooks/                   # Custom React hooks
-│   └── usePortfolio.js     # Portfolio data hook
-├── assets/                  # Static assets
-├── App.jsx                 # Root app component with routing
-├── main.jsx                # React DOM entry point
-└── index.css               # Global styles and theme variables
+frontend/
+├── index.html               # Vite entry HTML
+├── vite.config.js           # Dev server (port 3001) and React plugin
+├── tailwind.config.js       # Theme extensions aligned with the CSS tokens
+├── tsconfig.json            # Type-checking config for the JS/JSX sources
+└── src/
+    ├── components/
+    │   ├── common/              # Reusable UI primitives
+    │   │   ├── Button.jsx
+    │   │   ├── Card.jsx
+    │   │   ├── EmptyState.jsx
+    │   │   ├── ErrorState.jsx   # Full-page error + ErrorBanner
+    │   │   ├── FormControls.jsx
+    │   │   ├── LoadingSpinner.jsx
+    │   │   ├── Modal.jsx
+    │   │   ├── SegmentedControl.jsx
+    │   │   ├── StatTile.jsx
+    │   │   └── Table.jsx
+    │   ├── dashboard/           # Dashboard-specific components
+    │   │   ├── AllocationPieChart.jsx
+    │   │   ├── HoldingsPreview.jsx
+    │   │   ├── PerformanceChart.jsx
+    │   │   └── TimeRangeFilter.jsx
+    │   ├── holdings/            # Holdings page components
+    │   │   ├── FavouriteStar.jsx
+    │   │   ├── HoldingsSummaryCards.jsx
+    │   │   └── HoldingsTable.jsx
+    │   ├── portfolio/           # Buy/sell flow, reachable from the header
+    │   │   ├── TransactionButton.jsx
+    │   │   └── TransactionModal.jsx
+    │   ├── transactions/        # Transaction history components
+    │   │   ├── TransactionSummaryCards.jsx
+    │   │   └── TransactionsTable.jsx
+    │   └── layout/              # Layout and navigation
+    │       ├── AppLayout.jsx    # Sidebar + header + routed outlet
+    │       ├── Header.jsx       # Portfolio totals and buy/sell actions
+    │       └── Sidebar.jsx      # Primary navigation
+    ├── pages/                   # Route components
+    │   ├── DashboardPage.jsx
+    │   ├── HoldingsPage.jsx
+    │   └── TransactionHistoryPage.jsx
+    ├── services/                # API and data services
+    │   ├── api.js               # fetch wrapper, ApiError, get/post/patch
+    │   ├── index.js             # Selects the mock or real service
+    │   ├── portfolioService.js  # Backend-backed service + response enrichment
+    │   ├── mockPortfolioService.js
+    │   └── mockData.js
+    ├── context/
+    │   └── PortfolioContext.jsx # Provider + usePortfolioContext
+    ├── hooks/
+    │   ├── usePortfolio.js      # Owns portfolio state; instantiated once by the provider
+    │   └── useAsyncResource.js  # Loading/error state with stale-response protection
+    ├── constants/               # Shared domain constants
+    │   ├── portfolio.js         # Asset types, time ranges, chart palette, limits
+    │   └── transactions.js      # Transaction actions and filter options
+    ├── utils/                   # Formatting and domain helpers
+    │   ├── format.js
+    │   ├── portfolio.js
+    │   └── transactions.js
+    ├── App.jsx                  # Root component: provider + routes
+    ├── main.jsx                 # React DOM entry point
+    └── index.css                # Theme tokens and global styles
 ```
 
-## Architecture Overview
+## Architecture Details
 
-### Routing Structure
+### Routing
 
 The application uses React Router with a nested layout pattern:
 
-- **`/`** - Dashboard page (main landing)
-- **`/holdings`** - Holdings management page
-- **`/performance`** - Performance analytics page
+- **`/`** - Dashboard (summary stats, allocation chart, performance chart, holdings preview)
+- **`/holdings`** - Holdings table with type filtering and sorting
+- **`/transactions`** - Transaction history with search, action filter and sorting
 
-All routes are wrapped in `AppLayout` which provides the header, sidebar, and navigation.
+Any unmatched path redirects to `/`. All routes render inside `AppLayout`, which supplies the
+sidebar, the header and the content outlet.
 
 ### State Management
 
-- **PortfolioContext** - Global state for portfolio data
-- **usePortfolio Hook** - Custom hook to consume portfolio context
+- **`PortfolioProvider`** wraps the router in `App.jsx` and calls `usePortfolio` exactly once.
+- **`usePortfolio`** owns holdings, performance history, the selected time range, derived totals
+  (total value, cost basis, cash balance, total return) and the buy/sell/favourite actions.
+  Components should not call it directly.
+- **`usePortfolioContext`** is the consumer hook; it throws if used outside the provider.
+- **`useAsyncResource`** backs each fetch with loading/error state and ignores responses from
+  superseded requests, so a slow reply cannot overwrite a newer one.
+- **`dataVersion`** is bumped after every successful trade. Views that own data the context does
+  not manage — transaction history — refetch when it changes.
+
+Favouriting is applied optimistically and rolled back if the request fails.
 
 ### Component Hierarchy
 
 ```
-App (routing + context provider)
-└── Router
-    └── AppLayout (header + sidebar + outlet)
-        ├── DashboardPage
-        │   ├── SummaryStats
-        │   ├── AllocationPieChart
-        │   ├── PerformanceChart
-        │   └── ...
-        ├── HoldingsPage
-        └── PerformancePage
+App (PortfolioProvider + Router)
+└── AppLayout (Sidebar + Header + Outlet)
+    ├── DashboardPage
+    │   ├── AllocationPieChart
+    │   ├── PerformanceChart + TimeRangeFilter
+    │   ├── HoldingsPreview
+    │   └── TransactionModal
+    ├── HoldingsPage
+    │   ├── HoldingsSummaryCards
+    │   └── HoldingsTable → FavouriteStar
+    └── TransactionHistoryPage
+        ├── TransactionSummaryCards
+        └── TransactionsTable
 ```
 
 ### Styling Approach
 
-- **Tailwind CSS** - Utility-first styling with custom theme extensions in `tailwind.config.js`
-- **CSS Custom Properties** - Color variables and theme configuration defined in `index.css` with light/dark mode support
-- **Custom Animations** - Fade-in and fade-in-left animations defined in both `index.css` and `tailwind.config.js`
-- **Responsive Design** - Mobile-first approach with Tailwind breakpoints
-- **Dark Mode Support** - Automatic theme switching via CSS media queries
-- **Icons** - Uses emoji icons for simple, universal symbol representation
+- **CSS Custom Properties** - Colour, shadow and gridline tokens declared once in `index.css`
+  using `light-dark()`, so the light and dark palettes sit side by side.
+- **Theme switching** - `color-scheme: light dark` follows the OS by default; setting
+  `data-theme="light"` or `data-theme="dark"` on `<html>` pins it.
+- **Tailwind CSS 4** - Utilities plus a small `tailwind.config.js` that keeps `shadow-*` in sync
+  with the `--shadow-*` tokens.
+- **Icons** - Inline SVG paths, kept next to the data they belong to (see `Sidebar.jsx`).
 
 ## Data Services
 
-### Portfolio Service
+### Service Selection
 
-The `portfolioService.js` module handles all portfolio data fetching:
+`services/index.js` re-exports one implementation of the data API:
 
-- Get portfolio summary
-- Fetch holdings list
-- Retrieve performance data
-- Time-range filtering
+```
+getPortfolioItems  getPerformance  buyAsset  sellAsset  getTransactions  toggleFavourite
+```
 
-### Mock Data
+With `VITE_USE_MOCKS=true` these resolve to `mockPortfolioService.js`, which serves mutable
+in-memory fixtures with simulated latency and needs no backend. Otherwise they resolve to
+`portfolioService.js`, which talks to the Flask API through `api.js`.
 
-For development and testing, `mockPortfolioService.js` provides realistic mock data without requiring a backend connection.
+### Response Enrichment
+
+`portfolioService.js` normalises backend rows for the UI:
+
+- Derives `gainLoss` / `gainLossPercent` from `costBasis` and `unrealizedPnL`.
+- Prices `CASH` at par, since the backend has no price concept for it.
+- Values an unpriceable ticker at cost with unknown gain/loss, rather than at `$0`; those rows
+  render as `N/A`.
+
+### Error Handling
+
+`api.js` throws an `ApiError` carrying the HTTP status and response body. It tolerates non-JSON
+error responses (an HTML 5xx page from a proxy surfaces as a status, not a parse error).
 
 ## Development Tips
 
 ### Adding a New Component
 
-1. Create the component in the appropriate `components/` subdirectory
-2. Import and use it in a page or parent component
-3. Use Tailwind classes for styling
-4. Reference `StatTile.jsx` or `LoadingSpinner.jsx` for component patterns
+1. Create it in the matching `components/` subdirectory (`common/` only if it is feature-agnostic).
+2. Reuse the primitives in `common/` — `Card`, `Table`, `StatTile`, `SegmentedControl`.
+3. Style with Tailwind utilities and the `var(--…)` theme tokens rather than hard-coded colours.
 
 ### Adding a New Page
 
-1. Create a new file in `pages/` (e.g., `NewPage.jsx`)
-2. Add the route in `App.jsx`:
+1. Create a file in `pages/`.
+2. Register the route in `App.jsx` inside the `AppLayout` route:
    ```jsx
    <Route path="/new-page" element={<NewPage />} />
    ```
-3. Add navigation link in `Sidebar.jsx` or `Header.jsx`
-
-### Using Charts
-
-Charts are built with Recharts. Examples in `AllocationPieChart.jsx` and `PerformanceChart.jsx`.
+3. Add an entry to `NAV_ITEMS` in `Sidebar.jsx`.
 
 ### Accessing Portfolio Data
 
-Use the `usePortfolio` hook in any component:
-
 ```jsx
-import { usePortfolio } from '../hooks/usePortfolio'
+import { usePortfolioContext } from '../context/PortfolioContext'
 
 function MyComponent() {
-  const { portfolio, loading, error } = usePortfolio()
+  const { items, totalValue, itemsLoading, error } = usePortfolioContext()
   // ...
 }
 ```
 
-## Build and Deployment
+### Fetching Page-Local Data
 
-The frontend is optimized for production with:
+For data the portfolio context does not own, use `useAsyncResource` directly — see
+`TransactionHistoryPage.jsx`:
 
-- Code splitting
-- Tree-shaking for unused code
-- Minification and compression
-- TypeScript type checking during build
-
-To deploy, build the application and serve the `dist/` directory through a web server or hosting platform.
-
-## TypeScript
-
-The project uses TypeScript for type safety. Run type checking with:
-
-```bash
-npx tsc
+```jsx
+const { data, loading, error, load } = useAsyncResource(getTransactions, [])
+useEffect(() => { load() }, [load, dataVersion])
 ```
 
-This is also run automatically as part of `npm run build`.
+The fetcher must be referentially stable (a module-level function or a `useCallback`).
 
-## Performance Features
+### Using Charts
 
-- **Vite's Fast HMR** - Near-instant updates during development
-- **Lazy Loading** - Route-based code splitting with React Router
-- **Optimized Rendering** - Component-level optimization with React 19
-- **Tailwind CSS Purging** - Only includes used styles in production builds
+Charts are built with Recharts; see `AllocationPieChart.jsx` and `PerformanceChart.jsx`. Series
+colours come from `chartColorAt` / `PRIMARY_SERIES_COLOR` in `constants/portfolio.js`.
+
+## Build and Deployment
+
+`npm run build` type-checks with `tsc`, then produces a minified, tree-shaken bundle in `dist/`
+with Tailwind's unused styles removed. Deploy by serving `dist/` from any static host, with
+`VITE_API_URL` set at build time to the deployed backend.
