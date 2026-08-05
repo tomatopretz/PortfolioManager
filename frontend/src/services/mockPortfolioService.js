@@ -13,6 +13,19 @@ const findItem = (ticker, assetType) =>
 
 const findCashItem = () => mockData.items.find(isCashItem);
 
+// Mirrors the real service's portfolio-wide totals, derived from the already-enriched items.
+const computeTotals = (items) => {
+  const cashItem = items.find(isCashItem);
+  const totalCostBasis = items.reduce((sum, item) => sum + (item.costBasis ?? 0), 0);
+  const totalReturn = items.reduce((sum, item) => sum + (item.gainLoss ?? 0), 0);
+  return {
+    totalValue: items.reduce((sum, item) => sum + (item.marketValue ?? 0), 0),
+    totalCashBalance: cashItem ? Number(cashItem.marketValue ?? cashItem.quantity ?? 0) : 0,
+    totalReturn,
+    totalReturnPercent: totalCostBasis > 0 ? (totalReturn / totalCostBasis) * 100 : 0,
+  };
+};
+
 const recordTransaction = (item, type, quantity, price, useCash) => {
   const transaction = {
     id: `txn-${Date.now()}`,
@@ -29,7 +42,7 @@ const recordTransaction = (item, type, quantity, price, useCash) => {
 
 export const getPortfolioItems = async () => {
   await simulateLatency();
-  return mockData.items;
+  return { items: mockData.items, ...computeTotals(mockData.items) };
 };
 
 // Mirrors the real service: every range in one call, keyed by `TIME_RANGES` key.

@@ -14,4 +14,6 @@ class PortfolioItemResultDTO(BaseModel):
     lastUpdated: Optional[str] = None
     currentPrice: Optional[float] = None  # None if the ticker couldn't be priced
     marketValue: Optional[float] = None
-    unrealizedPnL: Optional[float] = None
+    costBasisPerShare: Optional[float] = None
+    pnl: Optional[float] = None
+    gainLossPercent: Optional[float] = None
