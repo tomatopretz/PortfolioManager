@@ -35,6 +35,22 @@ const fetchJson = async (path, options = {}) => {
 
 export const get = (path) => fetchJson(path, { method: 'GET' });
 
+export const getBlob = async (path) => {
+  const response = await fetch(`${apiUrl}${path}`);
+
+  if (!response.ok) {
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+    throw new ApiError(data?.error || `API error: ${response.status}`, response.status, data);
+  }
+
+  return response.blob();
+};
+
 export const post = (path, body) => fetchJson(path, { method: 'POST', body: JSON.stringify(body) });
 
 export const patch = (path, body) =>

@@ -111,9 +111,27 @@ export const sellAsset = async ({ ticker, assetType, quantity, price }) => {
   return recordTransaction(item, 'sell', quantity, price, true);
 };
 
+export const bulkRecordTransactions = async (transactions) => {
+  const created = [];
+
+  for (const transaction of transactions) {
+    const result =
+      transaction.type === 'buy'
+        ? await buyAsset(transaction)
+        : await sellAsset(transaction);
+    created.push(result.transaction);
+  }
+
+  return { count: created.length, created };
+};
+
 export const getTransactions = async () => {
   await simulateLatency();
   return mockData.transactions;
+};
+
+export const downloadTransactionsCsv = async () => {
+  await simulateLatency();
 };
 
 export const toggleFavourite = async (ticker, assetType) => {

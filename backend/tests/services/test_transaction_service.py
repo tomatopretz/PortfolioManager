@@ -108,6 +108,122 @@ def test_list_transactions_filters_by_tickers(mock_list_by_tickers):
     mock_list_by_tickers.assert_called_once_with(['AAPL'])
 
 
+# --- export_transactions_csv ------------------------------------------------------------------
+
+@patch('services.transaction_service.TransactionRepository.list_export_rows')  # mock: no DB call
+def test_export_transactions_csv_includes_cash_and_use_cash(mock_export_rows):
+    # Given export rows already include ticker/type from the backend join
+    mock_export_rows.return_value = [
+        {
+            'date': datetime(2026, 1, 1, tzinfo=timezone.utc),
+            'ticker': 'USD',
+            'assetType': 'CASH',
+            'type': 'buy',
+            'quantity': 1000,
+            'price': 1,
+            'useCash': False,
+        },
+        {
+            'date': datetime(2026, 1, 2, tzinfo=timezone.utc),
+            'ticker': 'TLT',
+            'assetType': 'BOND',
+            'type': 'buy',
+            'quantity': 10,
+            'price': 90,
+            'useCash': True,
+        },
+    ]
+
+    # When exporting CSV
+    result = TransactionService.export_transactions_csv()
+
+    # Then it uses the import-compatible schema, including cash actions and UseCash
+    assert result == (
+        'Date,Ticker,Type,Action,Quantity,Price,UseCash\n'
+        '2026-01-01,USD,CASH,DEPOSIT,1000,1,FALSE\n'
+        '2026-01-02,TLT,BOND,BUY,10,90,TRUE\n'
+    )
+
+
+# --- record_transactions_bulk ----------------------------------------------------------------
+
+@patch('services.transaction_service._remove_asset')  # mock: skip real sell/cash/portfolio writes
+@patch('services.transaction_service._add_asset')  # mock: skip real buy/cash/portfolio writes
+@patch('services.transaction_service.get_transaction')  # mock: replace the DB transaction context
+def test_record_transactions_bulk_uses_one_transaction_context(mock_get_transaction, mock_add_asset, mock_remove_asset):
+    # Given two requests and one fake DB transaction context
+    conn = MagicMock()
+
+    @contextmanager
+    def _tracked_transaction():
+        yield conn
+
+    buy_request = _request(type='buy', date=datetime(2026, 1, 1, tzinfo=timezone.utc))
+    sell_request = _request(type='sell', date=datetime(2026, 1, 2, tzinfo=timezone.utc))
+    buy_txn = _txn(str(uuid.uuid4()), 'buy', 10, buy_request.date)
+    sell_txn = _txn(str(uuid.uuid4()), 'sell', 10, sell_request.date)
+    mock_get_transaction.side_effect = _tracked_transaction
+    mock_add_asset.return_value = buy_txn
+    mock_remove_asset.return_value = sell_txn
+
+    # When recording both in bulk
+    result = TransactionService.record_transactions_bulk([buy_request, sell_request])
+
+    # Then one DB transaction spans both rows, while the same buy/sell helpers do the real work
+    assert result == [buy_txn, sell_txn]
+    mock_get_transaction.assert_called_once_with()
+    mock_add_asset.assert_called_once_with(buy_request, buy_request.date, conn)
+    mock_remove_asset.assert_called_once_with(sell_request, sell_request.date, conn)
+
+
+@patch('services.transaction_service._remove_asset')  # mock: skip real sell/cash/portfolio writes
+@patch('services.transaction_service._add_asset')  # mock: skip real buy/cash/portfolio writes
+@patch('services.transaction_service.get_transaction')  # mock: replace the DB transaction context
+def test_record_transactions_bulk_processes_requests_by_date(mock_get_transaction, mock_add_asset, mock_remove_asset):
+    # Given the CSV/import order puts a sell before its earlier buy
+    conn = MagicMock()
+
+    @contextmanager
+    def _tracked_transaction():
+        yield conn
+
+    sell_request = _request(type='sell', date=datetime(2026, 2, 1, tzinfo=timezone.utc))
+    buy_request = _request(type='buy', date=datetime(2026, 1, 1, tzinfo=timezone.utc))
+    mock_get_transaction.side_effect = _tracked_transaction
+    mock_add_asset.return_value = _txn(str(uuid.uuid4()), 'buy', 10, buy_request.date)
+    mock_remove_asset.return_value = _txn(str(uuid.uuid4()), 'sell', 10, sell_request.date)
+
+    # When recording in bulk
+    TransactionService.record_transactions_bulk([sell_request, buy_request])
+
+    # Then the earlier buy is applied first, so sells can find the holding they depend on
+    calls = mock_add_asset.mock_calls + mock_remove_asset.mock_calls
+    assert calls[0].args == (buy_request, buy_request.date, conn)
+    assert calls[1].args == (sell_request, sell_request.date, conn)
+
+
+@patch('services.transaction_service._remove_asset')  # mock: force a row failure
+@patch('services.transaction_service._add_asset')  # mock: skip real first-row write
+@patch('services.transaction_service.get_transaction')  # mock: replace the DB transaction context
+def test_record_transactions_bulk_propagates_row_failure(mock_get_transaction, mock_add_asset, mock_remove_asset):
+    # Given the second row fails while both rows are inside the same transaction context
+    conn = MagicMock()
+
+    @contextmanager
+    def _tracked_transaction():
+        yield conn
+
+    mock_get_transaction.side_effect = _tracked_transaction
+    mock_add_asset.return_value = _txn(str(uuid.uuid4()), 'buy', 10)
+    mock_remove_asset.side_effect = InsufficientBalanceError("'AAPL' quantity 5 is less than the 10 required")
+
+    # When/Then the bulk call raises so psycopg's transaction context can roll the batch back
+    with pytest.raises(InsufficientBalanceError):
+        TransactionService.record_transactions_bulk([_request(type='buy'), _request(type='sell')])
+
+    mock_get_transaction.assert_called_once_with()
+
+
 # --- record_transaction: date handling ---------------------------------------------------------
 
 @patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call

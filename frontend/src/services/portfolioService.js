@@ -1,4 +1,4 @@
-import { get, patch, post } from './api';
+import { get, getBlob, patch, post } from './api';
 import { TIME_RANGES } from '../constants/portfolio';
 import { isCashItem, normalizeAssetType } from '../utils/portfolio';
 
@@ -61,9 +61,26 @@ const recordTransaction = (payload) => post('/api/transactions', payload);
 export const buyAsset = recordTransaction;
 export const sellAsset = recordTransaction;
 
+export const bulkRecordTransactions = async (transactions) => {
+  const response = await post('/api/transactions/bulk', { transactions });
+  return response;
+};
+
 export const getTransactions = async () => {
   const response = await get('/api/transactions');
   return response || [];
+};
+
+export const downloadTransactionsCsv = async () => {
+  const blob = await getBlob('/api/transactions/export');
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 };
 
 export const toggleFavourite = async (ticker, assetType) => {

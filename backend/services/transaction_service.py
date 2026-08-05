@@ -1,4 +1,6 @@
+import csv
 from datetime import datetime, timezone
+from io import StringIO
 from typing import Literal, Optional
 
 from psycopg import Connection
@@ -21,6 +23,7 @@ class PortfolioItemNotFoundError(LookupError):
 
 
 _EPSILON = 1e-9  # tolerance for float rounding noise when comparing a running balance to zero
+_CSV_HEADERS = ('Date', 'Ticker', 'Type', 'Action', 'Quantity', 'Price', 'UseCash')
 
 
 class TransactionService:
@@ -41,6 +44,55 @@ class TransactionService:
             if request.type == 'buy':
                 return _add_asset(request, date, conn)
             return _remove_asset(request, date, conn)
+
+    @staticmethod
+    def record_transactions_bulk(requests: list[RecordTransactionRequestDTO]) -> list[TransactionDTO]:
+        """Record many transactions inside one DB transaction.
+
+        Deliberately duplicates record_transaction's tiny dispatch so this bulk endpoint can be
+        removed without touching the single-transaction path.
+        """
+        created = []
+        default_date = datetime.now(timezone.utc)
+        sorted_requests = sorted(
+            enumerate(requests),
+            key=lambda item: (item[1].date or default_date, item[0]),
+        )
+        with get_transaction() as conn:
+            for _, request in sorted_requests:
+                date = request.date or default_date
+                if request.type == 'buy':
+                    created.append(_add_asset(request, date, conn))
+                else:
+                    created.append(_remove_asset(request, date, conn))
+        return created
+
+    @staticmethod
+    def export_transactions_csv() -> str:
+        """Export transaction history as CSV, including direct cash deposits/withdrawals."""
+        output = StringIO()
+        writer = csv.writer(output, lineterminator='\n')
+        writer.writerow(_CSV_HEADERS)
+
+        for row in TransactionRepository.list_export_rows():
+            is_cash = row['assetType'] == CASH_ASSET_TYPE
+            action = row['type']
+            if is_cash:
+                action = 'deposit' if row['type'] == 'buy' else 'withdrawal'
+
+            writer.writerow(
+                [
+                    row['date'].date().isoformat(),
+                    row['ticker'],
+                    row['assetType'],
+                    action.upper(),
+                    row['quantity'],
+                    row['price'],
+                    'TRUE' if row['useCash'] else 'FALSE',
+                ]
+            )
+
+        return output.getvalue()
 
 
 

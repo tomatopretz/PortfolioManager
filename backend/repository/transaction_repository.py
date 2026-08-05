@@ -5,6 +5,7 @@ from psycopg import Connection
 
 from db import get_cursor
 from models.TransactionDTO import TransactionDTO
+from models.RecordTransactionRequestDTO import CASH_ASSET_TYPE
 
 TABLE = 'transaction'
 _COLUMNS = (
@@ -68,6 +69,21 @@ class TransactionRepository:
                 (tickers,),
             )
             return [_row_to_transaction(row) for row in cur.fetchall()]
+
+    @staticmethod
+    def list_export_rows() -> list[dict]:
+        """Return transaction rows joined to ticker/type for CSV export."""
+        with get_cursor() as cur:
+            cur.execute(
+                f'SELECT t.type, t.quantity, t.price, t.date, t.use_cash AS "useCash", '
+                f'p.ticker, p.asset_type AS "assetType" '
+                f'FROM {TABLE} t '
+                f'JOIN portfolio_item p ON p.id = t.portfolio_item_id '
+                f'WHERE NOT (p.asset_type = %s AND t.use_cash = TRUE) '
+                f'ORDER BY t.date ASC, t.id ASC',
+                (CASH_ASSET_TYPE,),
+            )
+            return cur.fetchall()
 
     @staticmethod
     def add(transaction: TransactionDTO, conn: Optional[Connection] = None) -> TransactionDTO:
