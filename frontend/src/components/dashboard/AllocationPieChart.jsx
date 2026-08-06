@@ -4,12 +4,26 @@ import Button from '../common/Button'
 import Card from '../common/Card'
 import { Table, Tbody, Td, Th, Thead, Tr } from '../common/Table'
 import { chartColorAt } from '../../constants/portfolio'
+import { useElementWidth } from '../../hooks/useElementWidth'
 import { capitalize, formatCurrency } from '../../utils/format'
+
+/**
+ * Below this the outside labels and their leader lines no longer fit either side of the pie, so
+ * they get folded into the legend instead. Roughly: the pie plus a leader line and a
+ * `12.3% ($12,345)` label on both sides.
+ */
+const LABELLED_LAYOUT_MIN_WIDTH = 400
+const LABELLED_PIE_RADIUS = 52
+const COMPACT_PIE_RADIUS = 90
 
 // Backend sends { assetType, marketValue, percent } slices, already grouped and sorted largest
 // first; this just adds the display name/value fields recharts expects.
 const toSlices = (allocation) =>
-  allocation.map((slice) => ({ ...slice, name: capitalize(slice.assetType), value: slice.marketValue }))
+  (allocation ?? []).map((slice) => ({
+    ...slice,
+    name: capitalize(slice.assetType),
+    value: slice.marketValue,
+  }))
 
 // Declared at module scope: an inline component identity changes every render, which makes
 // recharts tear down and remount the tooltip.
@@ -52,7 +66,11 @@ function ColorSwatch({ index }) {
 
 function AllocationPieChart({ allocation }) {
   const [showTable, setShowTable] = useState(false)
+  const [chartRef, chartWidth] = useElementWidth()
   const slices = useMemo(() => toSlices(allocation), [allocation])
+
+  // Unmeasured (first paint) is treated as roomy, matching the desktop case.
+  const showSliceLabels = chartWidth === null || chartWidth >= LABELLED_LAYOUT_MIN_WIDTH
 
   if (slices.length === 0) {
     return (
@@ -99,34 +117,58 @@ function AllocationPieChart({ allocation }) {
         </Table>
       ) : (
         <>
-          {/* Roomier than the slices alone need: the labels and their leader lines sit outside
-              the pie, so the radius stays small enough to keep them inside the card. */}
-          <ResponsiveContainer width="100%" height={260}>
-            <PieChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
-              <Pie
-                data={slices}
-                cx="50%"
-                cy="50%"
-                outerRadius={52}
-                dataKey="value"
-                label={<AllocationSliceLabel />}
-              >
-                {slices.map((slice, index) => (
-                  <Cell key={slice.assetType} fill={chartColorAt(index)} />
-                ))}
-              </Pie>
-              <Tooltip content={<AllocationTooltip />} />
-            </PieChart>
-          </ResponsiveContainer>
-
-          <div className="mt-2 flex flex-wrap gap-3">
-            {slices.map((slice, index) => (
-              <div key={slice.assetType} className="flex items-center gap-2 text-base">
-                <ColorSwatch index={index} />
-                <span className="text-[var(--text-secondary)]">{slice.name}</span>
-              </div>
-            ))}
+          {/* When the labels are shown the pie stays small: they and their leader lines sit
+              outside it and need the room. Narrow cards drop the labels - the legend carries the
+              same numbers instead - which frees that space up for a bigger pie. */}
+          <div ref={chartRef}>
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+                <Pie
+                  data={slices}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={showSliceLabels ? LABELLED_PIE_RADIUS : COMPACT_PIE_RADIUS}
+                  dataKey="value"
+                  label={showSliceLabels ? <AllocationSliceLabel /> : false}
+                  labelLine={showSliceLabels}
+                >
+                  {slices.map((slice, index) => (
+                    <Cell key={slice.assetType} fill={chartColorAt(index)} />
+                  ))}
+                </Pie>
+                <Tooltip content={<AllocationTooltip />} />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
+
+          {showSliceLabels ? (
+            <div className="mt-2 flex flex-wrap gap-3">
+              {slices.map((slice, index) => (
+                <div key={slice.assetType} className="flex items-center gap-2 text-base">
+                  <ColorSwatch index={index} />
+                  <span className="text-[var(--text-secondary)]">{slice.name}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <ul className="mt-2 space-y-1.5">
+              {slices.map((slice, index) => (
+                <li key={slice.assetType} className="flex items-center gap-2 text-base">
+                  <ColorSwatch index={index} />
+                  <span className="truncate text-[var(--text-secondary)]">{slice.name}</span>
+                  <span className="ml-auto whitespace-nowrap">
+                    <span className="font-semibold text-[var(--text-primary)]">
+                      {slice.percent.toFixed(1)}%
+                    </span>
+                    <span className="text-[var(--text-secondary)]">
+                      {' '}
+                      ({formatCurrency(slice.value, 0)})
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </>
       )}
     </Card>
