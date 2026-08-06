@@ -50,7 +50,7 @@ const orderRows = (items, sort) => {
 }
 
 function HoldingsPage() {
-  const { items, itemsLoading, error, totalValue, toggleFavourite } = usePortfolioContext()
+  const { items, itemsLoading, error, totalValue, highlights, toggleFavourite } = usePortfolioContext()
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState(ALL_TYPES)
   const [sort, setSort] = useState({ key: 'ticker', direction: 'asc' })
@@ -113,7 +113,7 @@ function HoldingsPage() {
 
       <ErrorBanner>{error}</ErrorBanner>
 
-      <HoldingsSummaryCards items={items} totalValue={totalValue} />
+      <HoldingsSummaryCards highlights={highlights} totalValue={totalValue} />
 
       <Card padding="p-8">
         <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

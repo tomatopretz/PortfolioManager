@@ -14,7 +14,21 @@ import { isCashItem, sumBy } from '../utils/portfolio'
 const NO_PERFORMANCE_RANGES = {}
 
 // Stable empty portfolio so the initial render doesn't hand consumers a fresh object each time.
-const EMPTY_PORTFOLIO = { items: [], totalValue: 0, totalCashBalance: 0, totalReturn: 0, totalReturnPercent: 0 }
+const EMPTY_PORTFOLIO = {
+  items: [],
+  totalValue: 0,
+  totalCashBalance: 0,
+  totalReturn: 0,
+  totalReturnPercent: 0,
+  allocation: [],
+  highlights: {
+    largestPosition: null,
+    topEarnerByAmount: null,
+    topEarnerByPercent: null,
+    worstEarnerByAmount: null,
+    worstEarnerByPercent: null,
+  },
+}
 
 /**
  * Owns all portfolio state. Intended to be instantiated exactly once, by `PortfolioProvider` —
@@ -146,6 +160,8 @@ export const usePortfolio = () => {
 
   return {
     items,
+    allocation: portfolio.allocation,
+    highlights: portfolio.highlights,
     performance,
     itemsLoading: itemsResource.loading,
     performanceLoading: performanceResource.loading,

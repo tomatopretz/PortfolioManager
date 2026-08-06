@@ -6,7 +6,6 @@ import { Table, Tbody, Td, Th, Thead, Tr } from '../common/Table'
 import { chartColorAt } from '../../constants/portfolio'
 import { useElementWidth } from '../../hooks/useElementWidth'
 import { capitalize, formatCurrency } from '../../utils/format'
-import { getMarketValue, isCashItem, normalizeAssetType } from '../../utils/portfolio'
 
 /**
  * Below this the outside labels and their leader lines no longer fit either side of the pie, so
@@ -83,7 +82,7 @@ function ColorSwatch({ index }) {
   )
 }
 
-function AllocationPieChart({ items }) {
+function AllocationPieChart({ allocation }) {
   const [showTable, setShowTable] = useState(false)
   const [chartRef, chartWidth] = useElementWidth()
   const { slices } = useMemo(() => buildAllocation(items), [items])

@@ -1,5 +1,7 @@
-from typing import Optional
+from typing import Callable, Optional
 
+from models.AllocationSliceDTO import AllocationSliceDTO
+from models.PortfolioHighlightDTO import PortfolioHighlightDTO
 from models.PortfolioItemDTO import PortfolioItemDTO
 from models.PortfolioItemResultDTO import PortfolioItemResultDTO
 from models.PortfolioResultDTO import PortfolioResultDTO
@@ -41,7 +43,6 @@ def _to_result_dto(item: PortfolioItemDTO, current_price: Optional[float]) -> Po
         pnl=pnl,
         gainLossPercent=gain_loss_percent,
     )
-
 
 class PortfolioService:
     """Business logic for portfolio items 
@@ -118,12 +119,22 @@ class PortfolioService:
         total_cost_basis = sum(item.costBasis for item in result_items)
         total_return_percent = round_money(total_return / total_cost_basis * 100) if total_cost_basis else 0.0
 
+        # extremes (largest position, top/worst earner) only make sense among priced, non-CASH
+        # holdings - CASH is always worth par and never a "position" in the ranking sense
+        non_cash_items = [item for item in result_items if item.assetType != CASH_ASSET_TYPE]
+
         return PortfolioResultDTO(
             items=result_items,
             totalValue=total_value,
             totalCashBalance=total_cash_balance,
             totalReturn=total_return,
             totalReturnPercent=total_return_percent,
+            allocationByType=_build_allocation(result_items),  # pie-chart slices, grouped by asset type
+            largestPosition=_to_highlight_dto(_extreme_by(non_cash_items, lambda i: i.marketValue, 'max')),
+            topEarnerByAmount=_to_highlight_dto(_extreme_by(non_cash_items, lambda i: i.pnl, 'max')),  # biggest $ gain
+            topEarnerByPercent=_to_highlight_dto(_extreme_by(non_cash_items, lambda i: i.gainLossPercent, 'max')),  # biggest % gain
+            worstEarnerByAmount=_to_highlight_dto(_extreme_by(non_cash_items, lambda i: i.pnl, 'min')),  # biggest $ loss
+            worstEarnerByPercent=_to_highlight_dto(_extreme_by(non_cash_items, lambda i: i.gainLossPercent, 'min')),  # biggest % loss
         )
 
     @staticmethod
@@ -143,3 +154,48 @@ class PortfolioService:
                 current_price = None
 
         return _to_result_dto(item, current_price)
+
+# Helpers for building allocation chart  and finding extremes (largest position, top/worst earner) among priced holdings
+
+def _build_allocation(items: list[PortfolioItemResultDTO]) -> list[AllocationSliceDTO]:
+    """Roll priced holdings up into one slice per asset type (CASH is its own slice), largest
+    first. Unpriced items (marketValue None/0) are excluded, same as the pie chart they feed."""
+    totals_by_type: dict[str, float] = {}
+    for item in items:
+        market_value = item.marketValue or 0
+        if market_value <= 0:
+            continue  # unpriced or zero-value item: no slice to add it to
+        key = CASH_ASSET_TYPE.lower() if item.assetType == CASH_ASSET_TYPE else item.assetType.lower()
+        totals_by_type[key] = totals_by_type.get(key, 0) + market_value  # accumulate into that type's bucket
+
+    total = sum(totals_by_type.values())  # denominator for each slice's percent share
+    return [
+        AllocationSliceDTO(
+            assetType=asset_type,
+            marketValue=round_money(value),
+            percent=round_money(value / total * 100) if total else 0.0,
+        )
+        for asset_type, value in sorted(totals_by_type.items(), key=lambda kv: kv[1], reverse=True)  # biggest slice first
+    ]
+
+
+def _extreme_by(
+    items: list[PortfolioItemResultDTO],
+    select: Callable[[PortfolioItemResultDTO], Optional[float]],
+    mode: str = 'max',
+) -> Optional[PortfolioItemResultDTO]:
+    """Item for which `select` returns the highest (`max`) or lowest (`min`) value. Items where
+    `select` returns None are ignored; None if none of `items` has a value at all."""
+    candidates = [item for item in items if select(item) is not None]  # drop unpriced/unknown items
+    if not candidates:
+        return None  # nothing left to rank - e.g. every ticker unpriced, or an empty list
+    return max(candidates, key=select) if mode == 'max' else min(candidates, key=select)
+
+
+def _to_highlight_dto(item: Optional[PortfolioItemResultDTO]) -> Optional[PortfolioHighlightDTO]:
+    """Narrow a full portfolio item down to the fields a highlight card needs; None passes through."""
+    if item is None:
+        return None
+    return PortfolioHighlightDTO(
+        ticker=item.ticker, marketValue=item.marketValue, pnl=item.pnl, gainLossPercent=item.gainLossPercent,
+    )
