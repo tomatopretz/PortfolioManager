@@ -3,6 +3,7 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import Card from '../common/Card'
 import TimeRangeFilter from './TimeRangeFilter'
 import { PRIMARY_SERIES_COLOR } from '../../constants/portfolio'
+import { useElementWidth } from '../../hooks/useElementWidth'
 import { formatCompactCurrency, formatCurrency } from '../../utils/format'
 
 const INTRADAY_RANGE = '1d'
@@ -103,9 +104,34 @@ function PerformanceTooltip({ active, payload }) {
 
 const AXIS_TICK = { fontSize: 14, fill: 'var(--text-secondary)' }
 
+/** Half the width of the widest label we render (`Aug'24`), which is what can overhang an edge. */
+const TICK_EDGE_INSET = 24
+
+/**
+ * An X-axis label that turns inwards near the chart's edges - anchoring its end (rather than its
+ * middle) to the tick - so the first and last labels stay inside the card instead of overhanging
+ * it. `format` maps the tick value to its text; an empty string renders nothing, which is how the
+ * date ranges thin their labels out.
+ */
+function AxisTick({ x, y, payload, chartWidth, format }) {
+  const label = format(payload.value)
+  if (!label) return null
+
+  let textAnchor = 'middle'
+  if (x < TICK_EDGE_INSET) textAnchor = 'start'
+  else if (chartWidth !== null && x > chartWidth - TICK_EDGE_INSET) textAnchor = 'end'
+
+  return (
+    <text {...AXIS_TICK} x={x} y={y} dy="0.71em" textAnchor={textAnchor}>
+      {label}
+    </text>
+  )
+}
+
 function PerformanceChart({ data, timeRange, onTimeRangeChange }) {
   const isIntraday = timeRange === INTRADAY_RANGE
   const points = data ?? []
+  const [chartRef, chartWidth] = useElementWidth()
 
   const chartData = useMemo(
     () =>
@@ -149,58 +175,60 @@ function PerformanceChart({ data, timeRange, onTimeRangeChange }) {
         <TimeRangeFilter timeRange={timeRange} onTimeRangeChange={onTimeRangeChange} />
       </div>
 
-      <ResponsiveContainer width="100%" height={300}>
-        <AreaChart data={chartData}>
-          <defs>
-            <linearGradient id={GRADIENT_ID} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={PRIMARY_SERIES_COLOR} stopOpacity={0.3} />
-              <stop offset="95%" stopColor={PRIMARY_SERIES_COLOR} stopOpacity={0} />
-            </linearGradient>
-          </defs>
+      <div ref={chartRef}>
+        <ResponsiveContainer width="100%" height={300}>
+          <AreaChart data={chartData}>
+            <defs>
+              <linearGradient id={GRADIENT_ID} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={PRIMARY_SERIES_COLOR} stopOpacity={0.3} />
+                <stop offset="95%" stopColor={PRIMARY_SERIES_COLOR} stopOpacity={0} />
+              </linearGradient>
+            </defs>
 
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--gridline)" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--gridline)" vertical={false} />
 
-          {isIntraday ? (
-            <XAxis
-              dataKey="timestamp"
-              type="number"
-              domain={['dataMin', 'dataMax']}
-              ticks={hourlyTicks}
-              tickFormatter={formatHourTick}
+            {isIntraday ? (
+              <XAxis
+                dataKey="timestamp"
+                type="number"
+                domain={['dataMin', 'dataMax']}
+                ticks={hourlyTicks}
+                tick={<AxisTick chartWidth={chartWidth} format={formatHourTick} />}
+                stroke="var(--gridline)"
+              />
+            ) : (
+              <XAxis
+                dataKey="date"
+                interval={0}
+                tick={
+                  <AxisTick chartWidth={chartWidth} format={(date) => dateLabels.get(date) ?? ''} />
+                }
+                stroke="var(--gridline)"
+              />
+            )}
+
+            <YAxis
+              domain={yDomain}
+              tickFormatter={formatCompactCurrency}
               tick={AXIS_TICK}
               stroke="var(--gridline)"
             />
-          ) : (
-            <XAxis
-              dataKey="date"
-              interval={0}
-              tickFormatter={(date) => dateLabels.get(date) ?? ''}
-              tick={AXIS_TICK}
-              stroke="var(--gridline)"
+
+            <Tooltip content={<PerformanceTooltip />} />
+
+            <Area
+              type="monotone"
+              dataKey="totalValue"
+              stroke={PRIMARY_SERIES_COLOR}
+              strokeWidth={2}
+              fillOpacity={1}
+              fill={`url(#${GRADIENT_ID})`}
+              dot={false}
+              isAnimationActive={false}
             />
-          )}
-
-          <YAxis
-            domain={yDomain}
-            tickFormatter={formatCompactCurrency}
-            tick={AXIS_TICK}
-            stroke="var(--gridline)"
-          />
-
-          <Tooltip content={<PerformanceTooltip />} />
-
-          <Area
-            type="monotone"
-            dataKey="totalValue"
-            stroke={PRIMARY_SERIES_COLOR}
-            strokeWidth={2}
-            fillOpacity={1}
-            fill={`url(#${GRADIENT_ID})`}
-            dot={false}
-            isAnimationActive={false}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
     </Card>
   )
 }
