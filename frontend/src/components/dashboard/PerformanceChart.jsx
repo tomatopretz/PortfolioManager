@@ -107,11 +107,23 @@ const AXIS_TICK = { fontSize: 14, fill: 'var(--text-secondary)' }
 /** Half the width of the widest label we render (`Aug'24`), which is what can overhang an edge. */
 const TICK_EDGE_INSET = 24
 
+// Recharts' own tick-line defaults, which it lays out relative to the tick text: the line runs
+// from the axis down to `tickMargin` above where the text starts. We redraw it here at the same
+// geometry so a tick that renders no label draws no mark either - see `AxisTick`.
+const TICK_SIZE = 6
+const TICK_MARGIN = 2
+
 /**
- * An X-axis label that turns inwards near the chart's edges - anchoring its end (rather than its
- * middle) to the tick - so the first and last labels stay inside the card instead of overhanging
- * it. `format` maps the tick value to its text; an empty string renders nothing, which is how the
- * date ranges thin their labels out.
+ * An X-axis tick: a short mark on the axis plus its label, turning inwards near the chart's edges
+ * - anchoring its end (rather than its middle) to the tick - so the first and last labels stay
+ * inside the card instead of overhanging it. `format` maps the tick value to its text; an empty
+ * string renders nothing at all, which is how the date ranges thin themselves out.
+ *
+ * The ranges run at `interval={0}` so that thinning stays ours to decide (recharts' own is
+ * width-based and would drop the first-of-month labels we specifically want). But that also means
+ * one tick per data point - a year of daily closes puts ~250 marks on the axis, which reads as a
+ * solid band rather than as ticks. So the axis draws no tick lines of its own (`tickLine={false}`)
+ * and each tick draws its own only when it has a label to sit under.
  */
 function AxisTick({ x, y, payload, chartWidth, format }) {
   const label = format(payload.value)
@@ -122,9 +134,18 @@ function AxisTick({ x, y, payload, chartWidth, format }) {
   else if (chartWidth !== null && x > chartWidth - TICK_EDGE_INSET) textAnchor = 'end'
 
   return (
-    <text {...AXIS_TICK} x={x} y={y} dy="0.71em" textAnchor={textAnchor}>
-      {label}
-    </text>
+    <>
+      <line
+        x1={x}
+        x2={x}
+        y1={y - TICK_SIZE - TICK_MARGIN}
+        y2={y - TICK_MARGIN}
+        stroke="var(--gridline)"
+      />
+      <text {...AXIS_TICK} x={x} y={y} dy="0.71em" textAnchor={textAnchor}>
+        {label}
+      </text>
+    </>
   )
 }
 
@@ -194,6 +215,7 @@ function PerformanceChart({ data, timeRange, onTimeRangeChange }) {
                 domain={['dataMin', 'dataMax']}
                 ticks={hourlyTicks}
                 tick={<AxisTick chartWidth={chartWidth} format={formatHourTick} />}
+                tickLine={false}
                 stroke="var(--gridline)"
               />
             ) : (
@@ -203,6 +225,7 @@ function PerformanceChart({ data, timeRange, onTimeRangeChange }) {
                 tick={
                   <AxisTick chartWidth={chartWidth} format={(date) => dateLabels.get(date) ?? ''} />
                 }
+                tickLine={false}
                 stroke="var(--gridline)"
               />
             )}

@@ -16,32 +16,14 @@ const LABELLED_LAYOUT_MIN_WIDTH = 400
 const LABELLED_PIE_RADIUS = 52
 const COMPACT_PIE_RADIUS = 90
 
-/** Rolls holdings up into one slice per asset type, largest first. */
-const buildAllocation = (items) => {
-  const totalsByType = new Map()
-
-  items.forEach((item) => {
-    if (getMarketValue(item) <= 0) return
-    const key = isCashItem(item) ? 'cash' : normalizeAssetType(item.assetType) || 'other'
-    totalsByType.set(key, (totalsByType.get(key) ?? 0) + getMarketValue(item))
-  })
-
-  const slices = Array.from(totalsByType, ([assetType, value]) => ({
-    assetType,
-    name: capitalize(assetType),
-    value: Math.round(value * 100) / 100,
-  })).sort((a, b) => b.value - a.value)
-
-  const total = slices.reduce((sum, slice) => sum + slice.value, 0)
-
-  return {
-    total,
-    slices: slices.map((slice) => ({
-      ...slice,
-      percent: total > 0 ? (slice.value / total) * 100 : 0,
-    })),
-  }
-}
+// Backend sends { assetType, marketValue, percent } slices, already grouped and sorted largest
+// first; this just adds the display name/value fields recharts expects.
+const toSlices = (allocation) =>
+  (allocation ?? []).map((slice) => ({
+    ...slice,
+    name: capitalize(slice.assetType),
+    value: slice.marketValue,
+  }))
 
 // Declared at module scope: an inline component identity changes every render, which makes
 // recharts tear down and remount the tooltip.
@@ -85,7 +67,7 @@ function ColorSwatch({ index }) {
 function AllocationPieChart({ allocation }) {
   const [showTable, setShowTable] = useState(false)
   const [chartRef, chartWidth] = useElementWidth()
-  const { slices } = useMemo(() => buildAllocation(items), [items])
+  const slices = useMemo(() => toSlices(allocation), [allocation])
 
   // Unmeasured (first paint) is treated as roomy, matching the desktop case.
   const showSliceLabels = chartWidth === null || chartWidth >= LABELLED_LAYOUT_MIN_WIDTH
