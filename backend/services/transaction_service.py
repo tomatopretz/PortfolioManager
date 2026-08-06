@@ -161,6 +161,41 @@ def _validate_debit(
             raise InsufficientBalanceError(
                 f'{label} would go negative ({balance}) as of the {txn.date} transaction'
             )
+        
+def _is_backdated(item: PortfolioItemDTO, date: datetime, conn: Connection) -> bool:
+    """True when `date` falls before the item's latest recorded transaction - i.e. this
+    transaction happened before something already on record, so it needs to be folded into
+    history at the point it actually occurred rather than just appended on top of the current
+    running totals."""
+    latest_date = TransactionRepository.get_latest_date(item.id, conn=conn)
+    return latest_date is not None and date < latest_date
+
+
+def _recompute_cost_basis_for_backdated_transaction(item: PortfolioItemDTO, conn: Connection) -> None:
+    """Rebuild item.quantity/costBasis by replaying its full transaction history in order.
+
+    - A backdated buy/sell of stock/bond can't just be added onto the current totals - a sell already on
+      record may have used the wrong average cost before this transaction was known about
+    - Call only after the new transaction is inserted, so the replay includes it"""
+    transactions = TransactionRepository.list_by_portfolio_item(item.id, conn=conn)  # every txn ever recorded for this item
+    history = sorted(transactions, key=lambda t: (t.date, _same_date_priority(t, is_cash=False)))  # true chronological order, same-day ties broken buy-before-sell
+
+    quantity = 0.0  # running share count, rebuilt from zero
+    cost_basis = 0.0  # running total $ paid, rebuilt from zero
+    for txn in history:  # replay every transaction in order, oldest first
+        if txn.type == 'buy':
+            quantity = round_money(quantity + txn.quantity)  # add the shares bought
+            cost_basis = round_money(cost_basis + txn.quantity * txn.price)  # add what was paid for them
+        else:
+            cost_basis_per_share = cost_basis / quantity if quantity else 0.0  # average cost at this point in history
+            quantity = round_money(quantity - txn.quantity)  # remove the shares sold
+            cost_basis = round_money(cost_basis_per_share * quantity)  # shrink cost basis to match what's left, at that average
+
+    item.quantity = quantity  # final replayed quantity replaces whatever was there before
+    item.costBasis = cost_basis  # final replayed cost basis replaces whatever was there before
+    PortfolioItemRepository.update(item, conn=conn)  # persist the corrected totals
+
+
 # --- Cash helpers - debit and credit cash --------------------------------
 
 
@@ -233,20 +268,17 @@ def _add_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Conne
 
 
 def _buy_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Connection) -> TransactionDTO:
-    # 1. debit CASH first, if this purchase is funded from the balance
+    # 1. validate and debit CASH first, if this purchase is funded from the cashBalance
     if request.useCash:
         cost = round_money(request.quantity * request.price)
         _debit_cash(cost, date, conn, useCash=True)
 
-    # 2. update the existing holding, or create it on the first buy of this ticker
+    # 2. update the existing holding, or create it on the first buy of this ticker. 
     item = PortfolioItemRepository.get_by_ticker_and_asset_type(
         request.ticker, request.assetType, conn=conn, for_update=True,
     )
-    if item is not None:
-        item.quantity = round_money(item.quantity + request.quantity)
-        item.costBasis = round_money(item.costBasis + request.quantity * request.price)
-        PortfolioItemRepository.update(item, conn=conn)
-    else:
+    is_backdated = item is not None and _is_backdated(item, date, conn)
+    if item is None:
         item = PortfolioItemRepository.add(
             PortfolioItemDTO(
                 ticker=request.ticker,
@@ -255,10 +287,14 @@ def _buy_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Conne
                 costBasis=round_money(request.quantity * request.price),
             ),
             conn=conn,
-        )
+        )   
+    elif not is_backdated:
+        item.quantity = round_money(item.quantity + request.quantity)
+        item.costBasis = round_money(item.costBasis + request.quantity * request.price)
+        PortfolioItemRepository.update(item, conn=conn)
 
-    # 3. record the buy itself
-    return TransactionRepository.add(
+    # 3. record the buy transaction itself
+    transaction = TransactionRepository.add(
         TransactionDTO(
             portfolioItemId=item.id,
             type='buy',
@@ -269,6 +305,13 @@ def _buy_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Conne
         ),
         conn=conn,
     )
+
+    # 4. additional - if transaction is backdated: fold it into the average cost at the point it actually happened, instead of
+    # just appending it onto whatever the running total is today
+    if is_backdated:
+        _recompute_cost_basis_for_backdated_transaction(item, conn)
+
+    return transaction
 
 
 # --- REMOVE flow (type='sell'): sell stock/bond, or withdraw cash --------------------------
@@ -292,20 +335,23 @@ def _sell_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Conn
 
     # 2. make sure this sell doesn't drive the holding negative, now or historically
     _validate_debit(item, request.quantity, date, conn, label=f"'{request.ticker}' quantity")
+    is_backdated = _is_backdated(item, date, conn)
 
     # 3. credit the proceeds to CASH
     proceeds = round_money(request.quantity * request.price)
     _credit_cash(proceeds, date, conn, useCash=True, cash=cash)
 
-    # 4. reduce the holding, carrying the average cost basis over to what remains
-    cost_basis_per_share = item.costBasis / item.quantity
-    new_quantity = round_money(item.quantity - request.quantity)
-    item.costBasis = round_money(cost_basis_per_share * new_quantity)
-    item.quantity = new_quantity
-    PortfolioItemRepository.update(item, conn=conn)
+    # 4. reduce the holding, carrying the average cost basis over to what remains. Skipped when
+    # backdated - the replay in step 6 recomputes this correctly instead.
+    if not is_backdated:
+        cost_basis_per_share = item.costBasis / item.quantity
+        new_quantity = round_money(item.quantity - request.quantity)
+        item.costBasis = round_money(cost_basis_per_share * new_quantity)
+        item.quantity = new_quantity
+        PortfolioItemRepository.update(item, conn=conn)
 
     # 5. record the sell itself
-    return TransactionRepository.add(
+    transaction = TransactionRepository.add(
         TransactionDTO(
             portfolioItemId=item.id,
             type='sell',
@@ -316,3 +362,10 @@ def _sell_asset(request: RecordTransactionRequestDTO, date: datetime, conn: Conn
         ),
         conn=conn,
     )
+
+    # 6. additional backdated: fold it into the average cost at the point it actually happened, instead of
+    # just appending it onto whatever the running total is today
+    if is_backdated:
+        _recompute_cost_basis_for_backdated_transaction(item, conn)
+
+    return transaction
