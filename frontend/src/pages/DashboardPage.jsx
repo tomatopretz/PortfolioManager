@@ -8,11 +8,12 @@ import AllocationPieChart from '../components/dashboard/AllocationPieChart'
 import HoldingsPreview from '../components/dashboard/HoldingsPreview'
 import PerformanceChart from '../components/dashboard/PerformanceChart'
 import TransactionModal from '../components/portfolio/TransactionModal'
-import { getMarketValue, isTradableHolding } from '../utils/portfolio'
+import { isTradableHolding } from '../utils/portfolio'
 
 function DashboardPage() {
   const {
     items,
+    allocation,
     performance,
     itemsLoading,
     performanceLoading,
@@ -35,7 +36,6 @@ function DashboardPage() {
     return <ErrorState title="Error loading portfolio" message={error} />
   }
 
-  const allocationItems = items.filter((item) => getMarketValue(item) > 0)
   const hasHoldings = items.some(isTradableHolding)
 
   return (
@@ -44,7 +44,7 @@ function DashboardPage() {
         <div className="space-y-6">
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="lg:col-span-1">
-              <AllocationPieChart items={allocationItems} />
+              <AllocationPieChart allocation={allocation} />
             </div>
             <div className="lg:col-span-2">
               {performanceLoading ? (
