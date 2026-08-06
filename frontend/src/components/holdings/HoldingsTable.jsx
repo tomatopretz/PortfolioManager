@@ -4,7 +4,6 @@ import {
   capitalize,
   formatCurrency,
   formatCurrencyOrNA,
-  formatDate,
   formatQuantity,
   formatSignedCurrencyOrNA,
   formatSignedPercentOrNA,
@@ -27,7 +26,6 @@ const HOLDINGS_COLUMNS = [
   { key: 'marketValue', label: 'Market Value', align: 'right' },
   { key: 'gainLoss', label: 'Gain/Loss ($)', align: 'right' },
   { key: 'gainLossPercent', label: 'Gain/Loss (%)', align: 'right' },
-  { key: 'lastUpdated', label: 'Last Updated', align: 'right' },
 ]
 
 function HoldingsTable({ rows, sort, onSort, onToggleFavourite }) {
@@ -87,9 +85,6 @@ function HoldingsTable({ rows, sort, onSort, onToggleFavourite }) {
               </Td>
               <Td align="right" className={`font-semibold ${tone}`}>
                 {formatSignedPercentOrNA(item.gainLossPercent)}
-              </Td>
-              <Td align="right" className="text-[var(--text-secondary)]">
-                {formatDate(item.lastUpdated)}
               </Td>
             </Tr>
           )

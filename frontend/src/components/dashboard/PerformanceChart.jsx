@@ -6,7 +6,9 @@ import { PRIMARY_SERIES_COLOR } from '../../constants/portfolio'
 import { formatCompactCurrency, formatCurrency } from '../../utils/format'
 
 const INTRADAY_RANGE = '1d'
-const MONTHLY_TICK_RANGES = new Set(['6m', '1y', 'all'])
+const MONTHLY_TICK_RANGES = new Set(['6m', '1y'])
+const QUARTERLY_TICK_RANGE = 'all'
+const QUARTERLY_TICK_MONTHS = 3
 const GRADIENT_ID = 'performance-area-gradient'
 
 const formatHourTick = (timestamp) => {
@@ -36,14 +38,23 @@ const buildHourlyTicks = (points) => {
   return ticks
 }
 
+const monthsBetween = (from, to) =>
+  (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth())
+
+/** e.g. `Aug'24` - the year matters once the series spans more than one. */
+const monthYearLabel = (date) =>
+  `${date.toLocaleDateString('en-US', { month: 'short' })}'${String(date.getFullYear() % 100).padStart(2, '0')}`
+
 /**
  * Precomputes the X-axis label for every point, keyed by date. Doing this once (rather than
  * inside `tickFormatter`) avoids an O(n) `findIndex` per tick, and keeps the thinning rules -
- * every 3rd day for 1M, first-of-month for the longer ranges - in one readable place.
+ * every 3rd day for 1M, first-of-month for 6M/1Y, every 3rd month for ALL - in one readable
+ * place.
  */
 const buildDateLabels = (data, timeRange) => {
   const shortDate = (date) => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   const labels = new Map()
+  const firstDate = data.length > 0 ? new Date(data[0].date) : null
 
   data.forEach((point, index) => {
     const date = new Date(point.date)
@@ -59,9 +70,17 @@ const buildDateLabels = (data, timeRange) => {
       return
     }
 
-    if (MONTHLY_TICK_RANGES.has(timeRange)) {
+    if (MONTHLY_TICK_RANGES.has(timeRange) || timeRange === QUARTERLY_TICK_RANGE) {
       const previousMonth = index > 0 ? new Date(data[index - 1].date).getMonth() : null
       const isNewMonth = previousMonth !== date.getMonth()
+
+      if (timeRange === QUARTERLY_TICK_RANGE) {
+        // Quarterly cadence anchored to the first point, so the series always opens with a label.
+        const onCadence = monthsBetween(firstDate, date) % QUARTERLY_TICK_MONTHS === 0
+        labels.set(point.date, isNewMonth && onCadence ? monthYearLabel(date) : '')
+        return
+      }
+
       labels.set(point.date, isNewMonth ? date.toLocaleDateString('en-US', { month: 'short' }) : '')
       return
     }
