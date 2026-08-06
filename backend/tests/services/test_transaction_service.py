@@ -352,11 +352,15 @@ def test_buy_asset_without_cash_creates_new_item_and_skips_cash_check(
 
 
 @patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.TransactionRepository.get_latest_date')  # mock: no real DB call
 @patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
 @patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
-def test_buy_asset_existing_item_accumulates_quantity_and_cost_basis(mock_get_item, mock_update_item, mock_add_txn):
-    # Given an existing AAPL holding
+def test_buy_asset_existing_item_accumulates_quantity_and_cost_basis(
+    mock_get_item, mock_update_item, mock_latest_date, mock_add_txn,
+):
+    # Given an existing AAPL holding with no prior transaction history to backdate against
     mock_get_item.return_value = _item('AAPL', quantity=5, cost_basis=500, asset_type='STOCK')
+    mock_latest_date.return_value = None
 
     # When buying more of it
     request = _request(type='buy', ticker='aapl', assetType='stock', quantity=5, price=120, useCash=False)
@@ -641,3 +645,40 @@ def test_sell_asset_backdated_insertion_that_invalidates_a_later_sell_raises(moc
         )
         with pytest.raises(InsufficientBalanceError):
             TransactionService.record_transaction(request)
+
+
+@patch('services.transaction_service.TransactionRepository.add', side_effect=_fake_repo_add)  # mock: fake insert, no real DB call
+@patch('services.transaction_service.TransactionRepository.list_by_portfolio_item')  # mock: no real DB call
+@patch('services.transaction_service.TransactionRepository.get_latest_date')  # mock: no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.update')  # mock: no real DB call
+@patch('services.transaction_service.PortfolioItemRepository.get_by_ticker_and_asset_type')  # mock: no real DB call
+def test_buy_asset_backdated_before_existing_sell_recomputes_average_cost(
+    mock_get_item, mock_update_item, mock_latest_date, mock_list_history, mock_add_txn,
+):
+    # Given AAPL was bought (10 @ $100 on day 1) then partially sold (6 shares on day 5) - under
+    # the naive running total, that leaves 4 shares / $400 cost basis (charged at $100/share,
+    # the only batch known about at the time)
+    stock = _item('AAPL', quantity=4, cost_basis=400, asset_type='STOCK')
+    mock_get_item.return_value = stock
+
+    day1_buy = _txn(stock.id, 'buy', 10, date=datetime(2026, 1, 1, tzinfo=timezone.utc), price=100)
+    day5_sell = _txn(stock.id, 'sell', 6, date=datetime(2026, 1, 5, tzinfo=timezone.utc), price=100)
+    backdated_buy = _txn(stock.id, 'buy', 10, date=datetime(2026, 1, 2, tzinfo=timezone.utc), price=50)
+
+    mock_latest_date.return_value = day5_sell.date  # request date below is earlier -> backdated
+    # Full history once the new buy is on record, in true chronological order
+    mock_list_history.return_value = [day1_buy, backdated_buy, day5_sell]
+
+    # When recording that missed buy, backdated to before the existing sell
+    request = _request(
+        type='buy', ticker='aapl', assetType='stock', quantity=10, price=50, useCash=False,
+        date=backdated_buy.date,
+    )
+    TransactionService.record_transaction(request)
+
+    # Then cost basis is recomputed by replaying the full history in order - buy10@100,
+    # buy10@50 (avg $75/share over 20 shares), sell6 (avg $75/share) - leaving $1050, not the
+    # naive $900 you'd get from just adding $500 onto the current $400 total
+    updated_item = mock_update_item.call_args[0][0]
+    assert updated_item.quantity == 14
+    assert updated_item.costBasis == 1050
