@@ -36,9 +36,15 @@ const enrichItem = (item) => {
   return { ...item, assetType, currentPrice, marketValue, gainLoss, gainLossPercent };
 };
 
+// Backend highlight shape is { ticker, marketValue, pnl, gainLossPercent }; rename pnl ->
+// gainLoss to match enrichItem's field names. null passes through as-is (nothing to highlight).
+const enrichHighlight = (highlight) =>
+  highlight && { ...highlight, gainLoss: highlight.pnl };
+
 // GET /api/portfolio now returns { items, totalValue, totalCashBalance, totalReturn,
-// totalReturnPercent } rather than a bare array - the portfolio-wide totals are computed
-// backend-side alongside each item's pnl/gainLossPercent instead of being summed client-side.
+// totalReturnPercent, allocationByType, largestPosition, topEarnerByAmount, topEarnerByPercent,
+// worstEarnerByAmount, worstEarnerByPercent } - allocation and portfolio-wide extremes are
+// computed backend-side alongside the totals instead of being derived client-side.
 export const getPortfolioItems = async () => {
   const response = await get('/api/portfolio');
   return {
@@ -47,6 +53,14 @@ export const getPortfolioItems = async () => {
     totalCashBalance: response?.totalCashBalance ?? 0,
     totalReturn: response?.totalReturn ?? 0,
     totalReturnPercent: response?.totalReturnPercent ?? 0,
+    allocation: response?.allocationByType ?? [],
+    highlights: {
+      largestPosition: enrichHighlight(response?.largestPosition),
+      topEarnerByAmount: enrichHighlight(response?.topEarnerByAmount),
+      topEarnerByPercent: enrichHighlight(response?.topEarnerByPercent),
+      worstEarnerByAmount: enrichHighlight(response?.worstEarnerByAmount),
+      worstEarnerByPercent: enrichHighlight(response?.worstEarnerByPercent),
+    },
   };
 };
 

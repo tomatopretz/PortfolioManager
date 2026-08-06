@@ -6,15 +6,15 @@ import {
   formatSignedCurrencyOrNA,
   formatSignedPercentOrNA,
 } from '../../utils/format'
-import { extremeBy, isCashItem, toneClass } from '../../utils/portfolio'
+import { toneClass } from '../../utils/portfolio'
 
-// label + which metric decides the winner + how that metric reads on the card.
+// label + which backend highlight fills the card + how its metric reads.
 const CARDS = [
-  { label: 'Largest Position', key: 'marketValue', mode: 'max', metric: 'share' },
-  { label: 'Top Earner ($)', key: 'gainLoss', mode: 'max', metric: 'currency' },
-  { label: 'Top Earner (%)', key: 'gainLossPercent', mode: 'max', metric: 'percent' },
-  { label: 'Worst Earner ($)', key: 'gainLoss', mode: 'min', metric: 'currency' },
-  { label: 'Worst Earner (%)', key: 'gainLossPercent', mode: 'min', metric: 'percent' },
+  { label: 'Largest Position', highlight: 'largestPosition', metric: 'share' },
+  { label: 'Top Earner ($)', highlight: 'topEarnerByAmount', metric: 'currency', valueKey: 'gainLoss' },
+  { label: 'Top Earner (%)', highlight: 'topEarnerByPercent', metric: 'percent', valueKey: 'gainLossPercent' },
+  { label: 'Worst Earner ($)', highlight: 'worstEarnerByAmount', metric: 'currency', valueKey: 'gainLoss' },
+  { label: 'Worst Earner (%)', highlight: 'worstEarnerByPercent', metric: 'percent', valueKey: 'gainLossPercent' },
 ]
 
 function PositionCard({ label, ticker, metricText, metricTone }) {
@@ -29,11 +29,9 @@ function PositionCard({ label, ticker, metricText, metricTone }) {
   )
 }
 
-function HoldingsSummaryCards({ items, totalValue }) {
-  const nonCash = items.filter((item) => !isCashItem(item))
-
-  const describe = ({ key, mode, metric }) => {
-    const item = extremeBy(nonCash, key, mode)
+function HoldingsSummaryCards({ highlights, totalValue }) {
+  const describe = ({ highlight, metric, valueKey }) => {
+    const item = highlights[highlight]
     if (!item) return { ticker: null, metricText: null, metricTone: '' }
 
     if (metric === 'share') {
@@ -45,7 +43,7 @@ function HoldingsSummaryCards({ items, totalValue }) {
       }
     }
 
-    const value = item[key]
+    const value = item[valueKey]
     return {
       ticker: item.ticker,
       metricText:

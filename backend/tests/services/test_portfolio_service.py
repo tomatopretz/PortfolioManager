@@ -187,6 +187,74 @@ def test_get_portfolio_totals_sum_across_items(mock_list_items, mock_list_prices
     assert result.totalReturnPercent == round(500.0 / 1500.0 * 100, 2)  # return over total cost basis (1000 + 500)
 
 
+@patch('services.portfolio_service.price_service.list_current_prices')  # mock: skip the real yfinance call
+@patch('services.portfolio_service.PortfolioService.list_portfolio_items')  # mock: skip the real repository call
+def test_get_portfolio_allocation_groups_by_asset_type_largest_first(mock_list_items, mock_list_prices):
+    # Given two stocks and a CASH holding
+    mock_list_items.return_value = [
+        _item('AAPL', quantity=10, cost_basis=1000),
+        _item('MSFT', quantity=5, cost_basis=500),
+        _item('USD', quantity=200, cost_basis=200, asset_type='CASH'),
+    ]
+    mock_list_prices.return_value = {'AAPL': 150.0, 'MSFT': 100.0}  # AAPL 1500, MSFT 500
+
+    # When/Then slices are grouped by asset type (CASH as its own slice), sorted largest first,
+    # with each slice's share of the total portfolio value
+    result = PortfolioService.get_enriched_portfolio()
+    assert [(s.assetType, s.marketValue) for s in result.allocationByType] == [
+        ('stock', 2000.0), ('cash', 200.0),
+    ]
+    assert result.allocationByType[0].percent == round(2000.0 / 2200.0 * 100, 2)
+
+
+@patch('services.portfolio_service.price_service.list_current_prices')  # mock: skip the real yfinance call
+@patch('services.portfolio_service.PortfolioService.list_portfolio_items')  # mock: skip the real repository call
+def test_get_portfolio_allocation_excludes_unpriced_items(mock_list_items, mock_list_prices):
+    # Given a holding the price service can't resolve
+    mock_list_items.return_value = [_item('BADTICKER', quantity=5, cost_basis=100)]
+    mock_list_prices.return_value = {}
+
+    # When/Then it contributes no slice, since it has no market value to allocate
+    result = PortfolioService.get_enriched_portfolio()
+    assert result.allocationByType == []
+
+
+@patch('services.portfolio_service.price_service.list_current_prices')  # mock: skip the real yfinance call
+@patch('services.portfolio_service.PortfolioService.list_portfolio_items')  # mock: skip the real repository call
+def test_get_portfolio_highlights_pick_extremes_among_non_cash_items(mock_list_items, mock_list_prices):
+    # Given a winner, a loser, and CASH
+    mock_list_items.return_value = [
+        _item('AAPL', quantity=10, cost_basis=1000),  # +500 (50%)
+        _item('TSLA', quantity=10, cost_basis=1000),  # -200 (-20%)
+        _item('USD', quantity=500, cost_basis=500, asset_type='CASH'),
+    ]
+    mock_list_prices.return_value = {'AAPL': 150.0, 'TSLA': 80.0}
+
+    # When/Then the largest position and top/worst earners are picked from non-CASH holdings only
+    result = PortfolioService.get_enriched_portfolio()
+    assert result.largestPosition.ticker == 'AAPL'
+    assert result.topEarnerByAmount.ticker == 'AAPL'
+    assert result.topEarnerByAmount.pnl == 500.0
+    assert result.topEarnerByPercent.ticker == 'AAPL'
+    assert result.worstEarnerByAmount.ticker == 'TSLA'
+    assert result.worstEarnerByAmount.pnl == -200.0
+    assert result.worstEarnerByPercent.ticker == 'TSLA'
+
+
+@patch('services.portfolio_service.PortfolioService.list_portfolio_items')  # mock: skip the real repository call
+def test_get_portfolio_highlights_are_none_when_only_cash_is_held(mock_list_items):
+    # Given the only holding is CASH
+    mock_list_items.return_value = [_item('USD', quantity=500, cost_basis=500, asset_type='CASH')]
+
+    # When/Then there's nothing to highlight - CASH is never a "position"
+    result = PortfolioService.get_enriched_portfolio()
+    assert result.largestPosition is None
+    assert result.topEarnerByAmount is None
+    assert result.topEarnerByPercent is None
+    assert result.worstEarnerByAmount is None
+    assert result.worstEarnerByPercent is None
+
+
 @patch('services.portfolio_service.PortfolioService.get_portfolio_item_by_ticker_and_asset_type')  # mock: skip the real repository call
 def test_get_portfolio_item_returns_none_when_not_found(mock_get_item):
     # Given no item exists at that ticker/assetType

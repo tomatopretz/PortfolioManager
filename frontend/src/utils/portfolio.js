@@ -25,16 +25,6 @@ export const getCostBasisPerShare = (item) => {
 export const sumBy = (items, selector) =>
   items.reduce((total, item) => total + (Number(selector(item)) || 0), 0)
 
-/** Item with the highest (`max`) or lowest (`min`) value for `key`; null for an empty list. */
-export const extremeBy = (items, key, mode = 'max') => {
-  const isBetter = mode === 'max' ? (a, b) => a > b : (a, b) => a < b
-  const fallback = mode === 'max' ? -Infinity : Infinity
-  return items.reduce(
-    (best, item) => (isBetter(item[key] ?? fallback, best?.[key] ?? fallback) ? item : best),
-    null
-  )
-}
-
 /** Tailwind text colour for a gain/loss figure: muted when unknown, green up, red down. */
 export const toneClass = (value) => {
   if (value == null) return 'text-[var(--text-secondary)]'
